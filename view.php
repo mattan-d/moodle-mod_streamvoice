@@ -39,7 +39,40 @@ if ($id) {
     $course = $DB->get_record('course', ['id' => $instance->course], '*', MUST_EXIST);
     $cm = get_coursemodule_from_instance('streamvoice', $instance->id, $course->id, false, MUST_EXIST);
 } else {
-    throw new moodle_exception('invalidcoursemodule');
+    require_login(null, false);
+    $PAGE->set_context(context_system::instance());
+    $PAGE->set_url(new moodle_url('/mod/streamvoice/view.php'));
+    $PAGE->set_pagelayout('standard');
+    $title = get_string('modulenameplural', 'streamvoice');
+    $PAGE->set_title($title);
+    $PAGE->set_heading($title);
+
+    $visible = [];
+    foreach (enrol_get_my_courses() as $mycourse) {
+        $modinfo = get_fast_modinfo($mycourse);
+        foreach ($modinfo->get_instances_of('streamvoice') as $activity) {
+            if ($activity->uservisible && $activity->url) {
+                $visible[] = $activity;
+            }
+        }
+    }
+    if (count($visible) === 1) {
+        redirect($visible[0]->url);
+    }
+
+    echo $OUTPUT->header();
+    if (!$visible) {
+        echo $OUTPUT->notification(get_string('none', 'streamvoice'), 'info');
+    } else {
+        echo html_writer::start_tag('ul');
+        foreach ($visible as $activity) {
+            $label = format_string($activity->name) . ' (' . format_string($activity->get_course()->shortname) . ')';
+            echo html_writer::tag('li', html_writer::link($activity->url, $label));
+        }
+        echo html_writer::end_tag('ul');
+    }
+    echo $OUTPUT->footer();
+    exit;
 }
 
 require_login($course, true, $cm);

@@ -24,17 +24,17 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'Vivago defense';
-$string['modulename'] = 'Vivago defense';
-$string['modulenameplural'] = 'Vivago defenses';
+$string['pluginname'] = 'Stream assignment defense';
+$string['modulename'] = 'Stream assignment defense';
+$string['modulenameplural'] = 'Stream assignment defenses';
 $string['modulename_help'] = 'Students submit a file. Stream locks it and runs an oral defense: preparation time, recorded answers, transcription, a rubric score, and a consistency check against the submitted work. The aim is to see that the student understands the work, not to detect whether a tool wrote the file.';
-$string['pluginadministration'] = 'Vivago defense administration';
-$string['privacy:metadata'] = 'The Vivago activity stores submissions, recordings, transcripts and scores in Stream. Moodle keeps the activity settings and the gradebook grade.';
+$string['pluginadministration'] = 'Stream assignment defense administration';
+$string['privacy:metadata'] = 'Stream assignment defense stores submissions, recordings, transcripts and scores in Stream. Moodle keeps the activity settings and the gradebook grade.';
 
-$string['streamvoice:view'] = 'View a Vivago defense';
-$string['streamvoice:submit'] = 'Submit work for a Vivago defense';
-$string['streamvoice:addinstance'] = 'Add a Vivago defense';
-$string['streamvoice:grade'] = 'View Vivago defense reports';
+$string['streamvoice:view'] = 'View a Stream assignment defense';
+$string['streamvoice:submit'] = 'Submit work for a Stream assignment defense';
+$string['streamvoice:addinstance'] = 'Add a Stream assignment defense';
+$string['streamvoice:grade'] = 'View Stream assignment defense reports';
 
 $string['deflang'] = 'Defense language';
 $string['lang_he'] = 'Hebrew';
@@ -51,7 +51,7 @@ $string['fixedquestions_help'] = 'One question per line. These are asked as writ
 $string['rubric'] = 'Rubric';
 $string['rubric_help'] = 'Sent to Stream and used for the oral score. If empty, Stream uses a default rubric: understanding, justification, consistency with the file, and independent reasoning.';
 $string['weightfile'] = 'Weight of consistency with the file';
-$string['weightfile_help'] = 'Percent of the Vivago score that comes from how well the explanation matches the locked file. Together with the oral weight this must equal 100.';
+$string['weightfile_help'] = 'Percent of the score that comes from how well the explanation matches the locked file. Together with the oral weight this must equal 100.';
 $string['weightoral'] = 'Weight of the oral explanation';
 $string['weightsmust100'] = 'The two weights must add up to 100.';
 $string['allowresubmission'] = 'Allow a new file before recording starts';
@@ -68,10 +68,10 @@ $string['submitandlock'] = 'Submit and lock';
 $string['beforelock'] = 'After you submit, the file is locked and the defense begins. You will explain the work on camera.';
 $string['lockednotice'] = 'Your file is locked. Continue the defense below.';
 $string['report'] = 'Defense report';
-$string['none'] = 'There are no Vivago defenses in this course yet.';
+$string['none'] = 'There are no Stream assignment defenses in this course yet.';
 
 $string['streamnotconfigured'] = 'Stream is not configured. Set the Stream URL and API key in Site administration → Plugins → Local plugins → Stream.';
-$string['error_unreachable'] = 'Stream did not respond. Check the Stream URL and that the Vivago API is available.';
+$string['error_unreachable'] = 'Stream did not respond. Check the Stream URL and that the assignment defense API is available.';
 $string['error_invalid_key'] = 'Stream rejected the API key.';
 $string['error_locked'] = 'This submission is already locked.';
 $string['error_not_open'] = 'Submissions are not open yet.';

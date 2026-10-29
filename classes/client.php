@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Thin client for the Stream Vivago API.
+ * Thin client for the Stream assignment defense API.
  *
  * This class does not decide questions, scores, or lock rules.
  * It only carries the activity definition and the submitted file to Stream.

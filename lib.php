@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Activity shell for Vivago. Defense logic is implemented in Stream.
+ * Activity shell for Stream assignment defense. Defense logic is implemented in Stream.
  *
  * @package    mod_streamvoice
  * @copyright  2026 CentricApp LTD, Dev Team (dev@centricapp.co)

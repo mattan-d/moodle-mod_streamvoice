@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Course index of Vivago activities.
+ * Course index of Stream assignment defense activities.
  *
  * @package    mod_streamvoice
  * @copyright  2026 CentricApp LTD, Dev Team (dev@centricapp.co)

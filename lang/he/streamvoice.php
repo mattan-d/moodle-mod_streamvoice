@@ -24,17 +24,17 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'הגנת Vivago';
-$string['modulename'] = 'הגנת Vivago';
-$string['modulenameplural'] = 'הגנות Vivago';
+$string['pluginname'] = 'הגנת מטלות Stream';
+$string['modulename'] = 'הגנת מטלות Stream';
+$string['modulenameplural'] = 'הגנות מטלות Stream';
 $string['modulename_help'] = 'הסטודנט מגיש קובץ. Stream נועל אותו ומריץ הגנה בעל פה: זמן הכנה, תשובות מוקלטות, תמלול, ציון לפי מחוון, ובדיקת עקביות מול העבודה שהוגשה. המטרה לוודא שהסטודנט מבין את העבודה ומסוגל לנמק אותה, לא לזהות אם כלי כתב את הקובץ.';
-$string['pluginadministration'] = 'ניהול הגנת Vivago';
-$string['privacy:metadata'] = 'פעילות Vivago שומרת הגשות, הקלטות, תמלולים וציונים ב-Stream. Moodle שומר את הגדרות הפעילות ואת הציון בגליון הציונים.';
+$string['pluginadministration'] = 'ניהול הגנת מטלות Stream';
+$string['privacy:metadata'] = 'הגנת מטלות Stream שומרת הגשות, הקלטות, תמלולים וציונים ב-Stream. Moodle שומר את הגדרות הפעילות ואת הציון בגליון הציונים.';
 
-$string['streamvoice:view'] = 'צפייה בהגנת Vivago';
-$string['streamvoice:submit'] = 'הגשת עבודה להגנת Vivago';
-$string['streamvoice:addinstance'] = 'הוספת הגנת Vivago';
-$string['streamvoice:grade'] = 'צפייה בדוחות הגנת Vivago';
+$string['streamvoice:view'] = 'צפייה בהגנת מטלות Stream';
+$string['streamvoice:submit'] = 'הגשת עבודה להגנת מטלות Stream';
+$string['streamvoice:addinstance'] = 'הוספת הגנת מטלות Stream';
+$string['streamvoice:grade'] = 'צפייה בדוחות הגנת מטלות Stream';
 
 $string['deflang'] = 'שפת ההגנה';
 $string['lang_he'] = 'עברית';
@@ -51,7 +51,7 @@ $string['fixedquestions_help'] = 'שאלה בכל שורה. הן נשאלות כ
 $string['rubric'] = 'מחוון';
 $string['rubric_help'] = 'נשלח ל-Stream ומשמש לציון ההסבר בעל פה. אם ריק, Stream משתמש במחוון ברירת מחדל: הבנה, נימוק, עקביות מול הקובץ, וחשיבה עצמאית.';
 $string['weightfile'] = 'משקל העקביות מול הקובץ';
-$string['weightfile_help'] = 'האחוז בציון Vivago שמגיע מההתאמה בין ההסבר לקובץ הנעול. יחד עם משקל ההסבר בעל פה הסכום חייב להיות 100.';
+$string['weightfile_help'] = 'האחוז בציון שמגיע מההתאמה בין ההסבר לקובץ הנעול. יחד עם משקל ההסבר בעל פה הסכום חייב להיות 100.';
 $string['weightoral'] = 'משקל ההסבר בעל פה';
 $string['weightsmust100'] = 'שני המשקלים חייבים להסתכם ב-100.';
 $string['allowresubmission'] = 'לאפשר קובץ חדש לפני תחילת ההקלטה';
@@ -68,10 +68,10 @@ $string['submitandlock'] = 'הגשה ונעילה';
 $string['beforelock'] = 'אחרי ההגשה הקובץ ננעל ומתחילה ההגנה. תתבקשו להסביר את העבודה מול המצלמה.';
 $string['lockednotice'] = 'הקובץ נעול. המשיכו להגנה למטה.';
 $string['report'] = 'דוח הגנה';
-$string['none'] = 'עדיין אין הגנות Vivago בקורס הזה.';
+$string['none'] = 'עדיין אין הגנות מטלות Stream בקורס הזה.';
 
 $string['streamnotconfigured'] = 'Stream לא מוגדר. הגדירו כתובת ומפתח API תחת ניהול האתר ← תוספים ← תוספים מקומיים ← Stream.';
-$string['error_unreachable'] = 'Stream לא ענה. בדקו את כתובת Stream ושה-API של Vivago זמין.';
+$string['error_unreachable'] = 'Stream לא ענה. בדקו את כתובת Stream ושה-API של הגנת מטלות Stream זמין.';
 $string['error_invalid_key'] = 'Stream דחה את מפתח ה-API.';
 $string['error_locked'] = 'ההגשה הזו כבר נעולה.';
 $string['error_not_open'] = 'עדיין אי אפשר להגיש.';
