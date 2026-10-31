@@ -44,7 +44,7 @@ function streamvoice_supports($feature) {
         case FEATURE_GRADE_HAS_GRADE:
             return true;
         case FEATURE_BACKUP_MOODLE2:
-            return false;
+            return true;
         default:
             return null;
     }
@@ -119,6 +119,23 @@ function streamvoice_push(\stdClass $instance, int $cmid): ?array {
         return null;
     }
     return $client->upsert_activity($instance, $cmid);
+}
+
+/**
+ * Duplication renames the activity after restore, so Stream is updated from the final name.
+ *
+ * @param \core\event\course_module_created $event
+ */
+function streamvoice_course_module_created(\core\event\course_module_created $event): void {
+    global $DB;
+    if (($event->other['modulename'] ?? '') !== 'streamvoice') {
+        return;
+    }
+    $instance = $DB->get_record('streamvoice', ['id' => (int) $event->other['instanceid']]);
+    if (!$instance) {
+        return;
+    }
+    streamvoice_push($instance, (int) $event->objectid);
 }
 
 /**
