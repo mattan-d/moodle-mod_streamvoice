@@ -24,22 +24,22 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'Stream assignment defense';
-$string['modulename'] = 'Stream assignment defense';
-$string['modulenameplural'] = 'Stream assignment defenses';
-$string['modulename_help'] = 'Students submit a file. Stream locks it and runs an oral defense: preparation time, recorded answers, transcription, a rubric score, and a consistency check against the submitted work. The aim is to see that the student understands the work, not to detect whether a tool wrote the file.';
-$string['pluginadministration'] = 'Stream assignment defense administration';
-$string['privacy:metadata'] = 'Stream assignment defense stores submissions, recordings, transcripts and scores in Stream. Moodle keeps the activity settings and the gradebook grade.';
+$string['pluginname'] = 'Stream Voice';
+$string['modulename'] = 'Stream Voice';
+$string['modulenameplural'] = 'Stream Voice';
+$string['modulename_help'] = 'Students submit a file. Stream Voice locks it and runs an oral defense: preparation time, recorded answers, transcription, a rubric score, and a consistency check against the submitted work. The aim is to see that the student understands the work, not to detect whether a tool wrote the file.';
+$string['pluginadministration'] = 'Stream Voice administration';
+$string['privacy:metadata'] = 'Stream Voice stores submissions, recordings, transcripts and scores in Stream. Moodle keeps the activity settings and the gradebook grade.';
 
-$string['streamvoice:view'] = 'View a Stream assignment defense';
-$string['streamvoice:submit'] = 'Submit work for a Stream assignment defense';
-$string['streamvoice:addinstance'] = 'Add a Stream assignment defense';
-$string['streamvoice:grade'] = 'View Stream assignment defense reports';
+$string['streamvoice:view'] = 'View Stream Voice';
+$string['streamvoice:submit'] = 'Submit work in Stream Voice';
+$string['streamvoice:addinstance'] = 'Add a Stream Voice activity';
+$string['streamvoice:grade'] = 'View Stream Voice reports';
 
-$string['deflang'] = 'Defense language';
+$string['deflang'] = 'Stream Voice language';
 $string['lang_he'] = 'Hebrew';
 $string['lang_en'] = 'English';
-$string['defensehdr'] = 'Defense';
+$string['defensehdr'] = 'Stream Voice';
 $string['prepseconds'] = 'Preparation time (seconds)';
 $string['prepseconds_help'] = 'How long the student has to read the questions and write speaker notes before recording starts. Stream enforces this timer.';
 $string['answerseconds'] = 'Answer time per question (seconds)';
@@ -62,16 +62,23 @@ $string['preprange'] = 'Preparation time must be between 0 and 3600 seconds.';
 $string['answerrange'] = 'Answer time must be between 30 and 900 seconds.';
 
 $string['artifact'] = 'Work file';
-$string['artifact_help'] = 'Code, a document, or a zip of the project. After you submit, Stream locks the file and opens the defense.';
+$string['artifact_help'] = 'Code, a document, or a zip of the project. After you submit, Stream Voice locks the file.';
 $string['artifactnote'] = 'Note for the marker (optional)';
 $string['submitandlock'] = 'Submit and lock';
-$string['beforelock'] = 'After you submit, the file is locked and the defense begins. You will explain the work on camera.';
-$string['lockednotice'] = 'Your file is locked. Continue the defense below.';
-$string['report'] = 'Defense report';
-$string['none'] = 'There are no Stream assignment defenses in this course yet.';
+$string['beforelock'] = 'After you submit, the file is locked and Stream Voice begins. You will explain the work on camera.';
+$string['lockednotice'] = 'Your file is locked. Continue to Stream Voice below.';
+$string['continuedefense'] = 'Continue to Stream Voice';
+$string['status_awaiting_model'] = 'Waiting for the automatic score';
+$string['status_awaiting_transcript'] = 'Waiting for the transcript';
+$string['status_provisional'] = 'Provisional score';
+$string['status_prep'] = 'Preparing';
+$string['status_recording'] = 'Recording';
+$string['backtosubmissions'] = 'Back to submissions';
+$string['report'] = 'Stream Voice report';
+$string['none'] = 'There is no Stream Voice activity in this course yet.';
 
 $string['streamnotconfigured'] = 'Stream is not configured. Set the Stream URL and API key in Site administration → Plugins → Local plugins → Stream.';
-$string['error_unreachable'] = 'Stream did not respond. Check the Stream URL and that the assignment defense API is available.';
+$string['error_unreachable'] = 'Stream did not respond. Check the Stream URL and that the Stream Voice API is available.';
 $string['error_invalid_key'] = 'Stream rejected the API key.';
 $string['error_locked'] = 'This submission is already locked.';
 $string['error_not_open'] = 'Submissions are not open yet.';
@@ -79,5 +86,5 @@ $string['error_closed'] = 'Submissions are closed.';
 $string['error_missing_file'] = 'Choose a file to submit.';
 $string['error_file_too_large'] = 'The file is larger than the allowed size.';
 $string['error_unknown_activity'] = 'Stream does not have this activity yet. Open the activity again after saving it.';
-$string['error_no_submission'] = 'Submit and lock the work before starting the defense.';
+$string['error_no_submission'] = 'Submit and lock the work before starting Stream Voice.';
 $string['error_not_configured'] = 'Stream is not configured.';

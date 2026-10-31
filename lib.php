@@ -243,6 +243,132 @@ function streamvoice_extend_settings_navigation(\settings_navigation $settings, 
 }
 
 /**
+ * Whether this user may submit a file.
+ *
+ * Site administrators pass the capability check, matching mod_assign.
+ * An enrolled student passes even when another role is also assigned.
+ *
+ * @param \context_module $context
+ * @param \stdClass $user
+ * @return bool
+ */
+function streamvoice_user_can_submit(\context_module $context, \stdClass $user): bool {
+    if (has_capability('mod/streamvoice:submit', $context, $user)) {
+        return true;
+    }
+    return streamvoice_user_is_course_student($context, $user);
+}
+
+/**
+ * Whether to show this user's own submission status table.
+ *
+ * mod_assign shows that table only with viewownsubmissionsummary, and it
+ * ignores the site-admin override. Students, including a switched role, see it.
+ *
+ * @param \context_module $context
+ * @param \stdClass $user
+ * @return bool
+ */
+function streamvoice_user_sees_own_summary(\context_module $context, \stdClass $user): bool {
+    if (has_capability('mod/streamvoice:submit', $context, $user, false)) {
+        return true;
+    }
+    return streamvoice_user_is_course_student($context, $user);
+}
+
+/**
+ * Enrolled user whose roles in this course include student.
+ *
+ * @param \context_module $context
+ * @param \stdClass $user
+ * @return bool
+ */
+function streamvoice_user_is_course_student(\context_module $context, \stdClass $user): bool {
+    $coursecontext = $context->get_course_context();
+    if (!is_enrolled($coursecontext, $user, '', true)) {
+        return false;
+    }
+    foreach (get_user_roles($coursecontext, (int) $user->id, true) as $role) {
+        if ($role->shortname === 'student') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Labels for one grading-table row, in the same shape as mod_assign.
+ *
+ * Stream keeps internal codes such as awaiting_model. Those stay in the API.
+ * This returns the words a marker should see.
+ *
+ * @param array<string, mixed>|null $row
+ * @return array{submission: string, submissionclass: string, grading: string, gradingclass: string}
+ */
+function streamvoice_grading_lines(?array $row): array {
+    if (!$row) {
+        return [
+            'submission' => get_string('submissionstatus_', 'assign'),
+            'submissionclass' => 'submissionstatus',
+            'grading' => '',
+            'gradingclass' => '',
+        ];
+    }
+
+    $reportstatus = (string) ($row['reportstatus'] ?? '');
+    $status = (string) ($row['status'] ?? '');
+    $graded = (array_key_exists('points', $row) && $row['points'] !== null) || $reportstatus === 'final';
+    $lines = [
+        'submission' => get_string('submissionstatus_submitted', 'assign'),
+        'submissionclass' => 'submissionstatussubmitted',
+        'grading' => '',
+        'gradingclass' => '',
+    ];
+    if ($graded) {
+        $lines['grading'] = get_string('graded', 'assign');
+        $lines['gradingclass'] = 'submissiongraded';
+        return $lines;
+    }
+
+    $pending = [
+        'awaiting_model' => 'status_awaiting_model',
+        'awaiting_transcript' => 'status_awaiting_transcript',
+        'provisional' => 'status_provisional',
+    ];
+    if (isset($pending[$reportstatus])) {
+        $lines['grading'] = get_string($pending[$reportstatus], 'streamvoice');
+        $lines['gradingclass'] = 'submissionnotgraded';
+        return $lines;
+    }
+    if ($status === 'prep') {
+        $lines['grading'] = get_string('status_prep', 'streamvoice');
+    } else if ($status === 'recording') {
+        $lines['grading'] = get_string('status_recording', 'streamvoice');
+    } else {
+        $lines['grading'] = get_string('notgraded', 'assign');
+    }
+    $lines['gradingclass'] = 'submissionnotgraded';
+    return $lines;
+}
+
+/**
+ * Whether the activity window currently accepts a file.
+ *
+ * @param \stdClass $instance
+ * @return bool
+ */
+function streamvoice_submissions_open(\stdClass $instance): bool {
+    $now = time();
+    if (!empty($instance->timeopen) && $now < (int) $instance->timeopen) {
+        return false;
+    }
+    if (!empty($instance->timeclose) && $now > (int) $instance->timeclose) {
+        return false;
+    }
+    return true;
+}
+
+/**
  * Map a Stream error code to a language string when one exists.
  *
  * @param array{ok: bool, message: string, code: string, data: array<string, mixed>} $result

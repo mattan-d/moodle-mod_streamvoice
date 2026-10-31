@@ -48,6 +48,6 @@ class submit_form extends \moodleform {
         $mform->addElement('textarea', 'note', get_string('artifactnote', 'streamvoice'), 'wrap="virtual" rows="4" cols="60"');
         $mform->setType('note', PARAM_TEXT);
 
-        $this->add_action_buttons(false, get_string('submitandlock', 'streamvoice'));
+        $this->add_action_buttons(true, get_string('submitandlock', 'streamvoice'));
     }
 }

@@ -24,22 +24,22 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$string['pluginname'] = 'הגנת מטלות Stream';
-$string['modulename'] = 'הגנת מטלות Stream';
-$string['modulenameplural'] = 'הגנות מטלות Stream';
-$string['modulename_help'] = 'הסטודנט מגיש קובץ. Stream נועל אותו ומריץ הגנה בעל פה: זמן הכנה, תשובות מוקלטות, תמלול, ציון לפי מחוון, ובדיקת עקביות מול העבודה שהוגשה. המטרה לוודא שהסטודנט מבין את העבודה ומסוגל לנמק אותה, לא לזהות אם כלי כתב את הקובץ.';
-$string['pluginadministration'] = 'ניהול הגנת מטלות Stream';
-$string['privacy:metadata'] = 'הגנת מטלות Stream שומרת הגשות, הקלטות, תמלולים וציונים ב-Stream. Moodle שומר את הגדרות הפעילות ואת הציון בגליון הציונים.';
+$string['pluginname'] = 'Stream Voice';
+$string['modulename'] = 'Stream Voice';
+$string['modulenameplural'] = 'Stream Voice';
+$string['modulename_help'] = 'הסטודנט מגיש קובץ. Stream Voice נועל אותו ומריץ הגנה בעל פה: זמן הכנה, תשובות מוקלטות, תמלול, ציון לפי מחוון, ובדיקת עקביות מול העבודה שהוגשה. המטרה לוודא שהסטודנט מבין את העבודה ומסוגל לנמק אותה, לא לזהות אם כלי כתב את הקובץ.';
+$string['pluginadministration'] = 'ניהול Stream Voice';
+$string['privacy:metadata'] = 'Stream Voice שומר הגשות, הקלטות, תמלולים וציונים ב-Stream. Moodle שומר את הגדרות הפעילות ואת הציון בגליון הציונים.';
 
-$string['streamvoice:view'] = 'צפייה בהגנת מטלות Stream';
-$string['streamvoice:submit'] = 'הגשת עבודה להגנת מטלות Stream';
-$string['streamvoice:addinstance'] = 'הוספת הגנת מטלות Stream';
-$string['streamvoice:grade'] = 'צפייה בדוחות הגנת מטלות Stream';
+$string['streamvoice:view'] = 'צפייה ב-Stream Voice';
+$string['streamvoice:submit'] = 'הגשת עבודה ב-Stream Voice';
+$string['streamvoice:addinstance'] = 'הוספת Stream Voice';
+$string['streamvoice:grade'] = 'צפייה בדוחות Stream Voice';
 
-$string['deflang'] = 'שפת ההגנה';
+$string['deflang'] = 'שפת Stream Voice';
 $string['lang_he'] = 'עברית';
 $string['lang_en'] = 'English';
-$string['defensehdr'] = 'הגנה';
+$string['defensehdr'] = 'Stream Voice';
 $string['prepseconds'] = 'זמן הכנה (שניות)';
 $string['prepseconds_help'] = 'כמה זמן יש לסטודנט לקרוא את השאלות ולרשום הערות לפני שההקלטה נפתחת. Stream אוכף את השעון.';
 $string['answerseconds'] = 'זמן תשובה לכל שאלה (שניות)';
@@ -62,16 +62,23 @@ $string['preprange'] = 'זמן ההכנה חייב להיות בין 0 ל-3600 �
 $string['answerrange'] = 'זמן התשובה חייב להיות בין 30 ל-900 שניות.';
 
 $string['artifact'] = 'קובץ העבודה';
-$string['artifact_help'] = 'קוד, מסמך, או zip של הפרויקט. אחרי ההגשה Stream נועל את הקובץ ופותח את ההגנה.';
+$string['artifact_help'] = 'קוד, מסמך, או zip של הפרויקט. אחרי ההגשה Stream Voice נועל את הקובץ.';
 $string['artifactnote'] = 'הערה לבודק (לא חובה)';
 $string['submitandlock'] = 'הגשה ונעילה';
-$string['beforelock'] = 'אחרי ההגשה הקובץ ננעל ומתחילה ההגנה. תתבקשו להסביר את העבודה מול המצלמה.';
-$string['lockednotice'] = 'הקובץ נעול. המשיכו להגנה למטה.';
-$string['report'] = 'דוח הגנה';
-$string['none'] = 'עדיין אין הגנות מטלות Stream בקורס הזה.';
+$string['beforelock'] = 'אחרי ההגשה הקובץ ננעל ומתחיל Stream Voice. תתבקשו להסביר את העבודה מול המצלמה.';
+$string['lockednotice'] = 'הקובץ נעול. המשיכו ל-Stream Voice למטה.';
+$string['continuedefense'] = 'המשך ל-Stream Voice';
+$string['status_awaiting_model'] = 'ממתין לציון אוטומטי';
+$string['status_awaiting_transcript'] = 'ממתין לתמלול';
+$string['status_provisional'] = 'ציון זמני';
+$string['status_prep'] = 'בזמן הכנה';
+$string['status_recording'] = 'בהקלטה';
+$string['backtosubmissions'] = 'חזרה להגשות';
+$string['report'] = 'דוח Stream Voice';
+$string['none'] = 'עדיין אין פעילות Stream Voice בקורס הזה.';
 
 $string['streamnotconfigured'] = 'Stream לא מוגדר. הגדירו כתובת ומפתח API תחת ניהול האתר ← תוספים ← תוספים מקומיים ← Stream.';
-$string['error_unreachable'] = 'Stream לא ענה. בדקו את כתובת Stream ושה-API של הגנת מטלות Stream זמין.';
+$string['error_unreachable'] = 'Stream לא ענה. בדקו את כתובת Stream ושה-API של Stream Voice זמין.';
 $string['error_invalid_key'] = 'Stream דחה את מפתח ה-API.';
 $string['error_locked'] = 'ההגשה הזו כבר נעולה.';
 $string['error_not_open'] = 'עדיין אי אפשר להגיש.';
@@ -79,5 +86,5 @@ $string['error_closed'] = 'ההגשה נסגרה.';
 $string['error_missing_file'] = 'בחרו קובץ להגשה.';
 $string['error_file_too_large'] = 'הקובץ גדול מהגודל המותר.';
 $string['error_unknown_activity'] = 'הפעילות עדיין לא רשומה ב-Stream. פתחו אותה שוב אחרי השמירה.';
-$string['error_no_submission'] = 'יש להגיש ולנעול את העבודה לפני תחילת ההגנה.';
+$string['error_no_submission'] = 'יש להגיש ולנעול את העבודה לפני תחילת Stream Voice.';
 $string['error_not_configured'] = 'Stream לא מוגדר.';

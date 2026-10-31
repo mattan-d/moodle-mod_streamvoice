@@ -1,0 +1,59 @@
+.path-mod-streamvoice div.submissionstatustable,
+.path-mod-streamvoice div.gradingsummary {
+    margin-bottom: 1.5em;
+}
+
+.path-mod-streamvoice div.submissionsummarytable .generaltable,
+.path-mod-streamvoice div.gradingsummary .generaltable {
+    width: 100%;
+}
+
+.path-mod-streamvoice .gradingsummarytable,
+.path-mod-streamvoice .submissionsummarytable {
+    margin-top: 1em;
+}
+
+.path-mod-streamvoice .submissionsummarytable .c0,
+.path-mod-streamvoice .gradingsummarytable .c0 {
+    width: 15em;
+}
+
+.path-mod-streamvoice td.submissionstatussubmitted {
+    color: black;
+    background-color: #cfefcf;
+}
+
+.path-mod-streamvoice td.submissiongraded {
+    color: black;
+    background-color: #cfefcf;
+}
+
+.path-mod-streamvoice td.submissionnotgraded,
+.path-mod-streamvoice .submissionnotgraded {
+    color: black;
+}
+
+.path-mod-streamvoice div.submissionstatus {
+    color: black;
+    background-color: #efefef;
+}
+
+.path-mod-streamvoice div.submissionstatussubmitted {
+    color: black;
+    background-color: #cfefcf;
+}
+
+.path-mod-streamvoice div.submissiongraded {
+    color: black;
+    background-color: #cfefcf;
+}
+
+.path-mod-streamvoice table.gradingtable {
+    width: 100%;
+}
+
+.path-mod-streamvoice .gradingtable .submissioninfo div {
+    display: inline-block;
+    padding: 0 0.4em;
+    margin-inline-end: 0.35em;
+}
