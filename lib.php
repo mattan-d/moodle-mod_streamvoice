@@ -136,6 +136,7 @@ function streamvoice_course_module_created(\core\event\course_module_created $ev
         return;
     }
     streamvoice_push($instance, (int) $event->objectid);
+    streamvoice_collapse_grade_items($instance);
 }
 
 /**
@@ -159,6 +160,47 @@ function streamvoice_apply_remote_grade(\stdClass $instance, array $row): void {
 }
 
 /**
+ * Keep one grade item per activity. A course copy can restore the gradebook
+ * item and also create one here, and Moodle then refuses to store the score.
+ *
+ * @param \stdClass $streamvoice
+ */
+function streamvoice_collapse_grade_items(\stdClass $streamvoice): void {
+    global $CFG, $DB;
+    require_once($CFG->libdir . '/gradelib.php');
+
+    $items = $DB->get_records('grade_items', [
+        'courseid' => $streamvoice->course,
+        'itemtype' => 'mod',
+        'itemmodule' => 'streamvoice',
+        'iteminstance' => $streamvoice->id,
+        'itemnumber' => 0,
+    ], 'id ASC');
+    if (count($items) < 2) {
+        return;
+    }
+    $keepid = (int) reset($items)->id;
+    foreach ($items as $item) {
+        if ($DB->record_exists_select('grade_grades', 'itemid = ? AND rawgrade IS NOT NULL', [$item->id])) {
+            $keepid = (int) $item->id;
+            break;
+        }
+    }
+    foreach ($items as $item) {
+        if ((int) $item->id === $keepid) {
+            continue;
+        }
+        if ($DB->record_exists_select('grade_grades', 'itemid = ? AND rawgrade IS NOT NULL', [$item->id])) {
+            continue;
+        }
+        $gradeitem = grade_item::fetch(['id' => $item->id]);
+        if ($gradeitem) {
+            $gradeitem->delete('mod/streamvoice');
+        }
+    }
+}
+
+/**
  * @param \stdClass $streamvoice
  * @param mixed $grades
  * @param bool $delete
@@ -168,6 +210,9 @@ function streamvoice_grade_item_update($streamvoice, $grades = null, $delete = f
     global $CFG;
     require_once($CFG->libdir . '/gradelib.php');
 
+    if (!$delete) {
+        streamvoice_collapse_grade_items($streamvoice);
+    }
     $item = ['itemname' => $streamvoice->name];
     if (!empty($streamvoice->cmidnumber)) {
         $item['idnumber'] = $streamvoice->cmidnumber;
