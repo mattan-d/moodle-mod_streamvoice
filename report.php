@@ -144,6 +144,21 @@ echo $OUTPUT->footer();
 function streamvoice_report_page_start(array $notices): void {
     global $OUTPUT;
     echo $OUTPUT->header();
+    // Boost Union prints Moodle's performance placeholder in the footer. This
+    // site does not show performance stats, so the raw token would stay visible.
+    echo html_writer::tag('style', '.footer-content-debugging{display:none !important}');
+    echo html_writer::script(
+        "document.addEventListener('DOMContentLoaded', function () {\n"
+        . "    document.querySelectorAll('.footer-content-debugging').forEach(function (el) { el.remove(); });\n"
+        . "    document.querySelectorAll('body *').forEach(function (el) {\n"
+        . "        el.childNodes.forEach(function (node) {\n"
+        . "            if (node.nodeType === 3 && node.nodeValue.indexOf('%%') !== -1) {\n"
+        . "                node.nodeValue = node.nodeValue.replace(/%%(?:PERFORMANCEINFO|ENDHTML)-[^%]*%%/g, '');\n"
+        . "            }\n"
+        . "        });\n"
+        . "    });\n"
+        . "});"
+    );
     foreach ($notices as $notice) {
         echo $OUTPUT->notification($notice[0], $notice[1]);
     }
@@ -352,11 +367,25 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
         html_writer::link($back, get_string('backtosubmissions', 'streamvoice'), ['class' => 'btn btn-secondary']),
         'mb-3'
     );
-    $html .= $OUTPUT->heading(fullname($user), 2);
-    $html .= $OUTPUT->user_picture($user, ['courseid' => $course->id, 'size' => 50, 'includefullname' => false]);
+    $html .= html_writer::start_div('d-flex align-items-center mb-3');
+    $html .= $OUTPUT->user_picture($user, ['courseid' => $course->id, 'size' => 50, 'includefullname' => false, 'class' => 'me-3']);
+    $html .= $OUTPUT->heading(fullname($user), 2, 'h3 mb-0');
+    $html .= html_writer::end_div();
+
+    $answers = [];
+    $report = [];
+    if ($row && $client->is_configured()) {
+        $detail = $client->submission_report((int) $cm->id, (int) ($row['id'] ?? 0));
+        if ($detail['ok']) {
+            $report = is_array($detail['data']['report'] ?? null) ? $detail['data']['report'] : [];
+            $answers = is_array($detail['data']['answers'] ?? null) ? $detail['data']['answers'] : [];
+        } else {
+            $html .= $OUTPUT->notification(streamvoice_error_text($detail), 'error');
+        }
+    }
 
     $lines = streamvoice_grading_lines($row);
-    $html .= html_writer::start_div('submissionstatustable mt-3');
+    $html .= $OUTPUT->container_start('submissionstatustable mt-3');
     $html .= $OUTPUT->heading(get_string('submissionstatusheading', 'assign'), 3);
     $html .= $OUTPUT->box_start('boxaligncenter submissionsummarytable');
     $summary = new html_table();
@@ -376,11 +405,26 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
         $grade = (array_key_exists('points', $row) && $row['points'] !== null)
             ? format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2)
             : '-';
-        $summary->data[] = streamvoice_report_row(get_string('gradenoun'), $grade);
+        $summary->data[] = streamvoice_report_row(
+            get_string('gradenoun'),
+            html_writer::span($grade, '', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate'])
+        );
         $summary->data[] = streamvoice_report_row(
             get_string('pluginname', 'assignsubmission_file'),
             s((string) ($row['artifactname'] ?? ''))
         );
+        if (isset($report['consistency']) && $report['consistency'] !== null) {
+            $summary->data[] = streamvoice_report_row(
+                get_string('consistency', 'streamvoice'),
+                format_float((float) $report['consistency'], 1)
+            );
+        }
+        if (isset($report['oral']) && $report['oral'] !== null) {
+            $summary->data[] = streamvoice_report_row(
+                get_string('oralscore', 'streamvoice'),
+                format_float((float) $report['oral'], 1)
+            );
+        }
         if (!empty($row['summary'])) {
             $summary->data[] = streamvoice_report_row(get_string('feedback', 'assign'), format_text((string) $row['summary'], FORMAT_PLAIN));
         }
@@ -389,19 +433,74 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
     $html .= $OUTPUT->box_end();
     $html .= $OUTPUT->container_end();
 
-    if ($row && $client->is_configured()) {
-        $launch = $client->issue_launch((int) $cm->id, $user, 'teacher');
-        if ($launch['ok'] && !empty($launch['data']['url'])) {
-            $src = $launch['data']['url'];
-            $src .= (strpos($src, '?') === false ? '?' : '&') . 'submission=' . (int) ($row['id'] ?? 0);
-            $html .= html_writer::tag('iframe', '', [
-                'src' => $src,
-                'style' => 'width:100%;min-height:70vh;border:0;background:#fff;margin-top:1rem;',
-                'title' => get_string('report', 'streamvoice'),
-            ]);
-        } else if (!$launch['ok']) {
-            $html .= $OUTPUT->notification(streamvoice_error_text($launch), 'error');
+    if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
+        $html .= streamvoice_report_answers($answers);
+    }
+    return $html;
+}
+
+/**
+ * Recorded answers, drawn in the page instead of a nested frame.
+ *
+ * @param mixed $answers
+ * @return string
+ */
+function streamvoice_report_answers($answers): string {
+    global $OUTPUT;
+
+    $html = html_writer::tag('style',
+        '.streamvoice-answer .sv-body{display:flex;flex-wrap:wrap;gap:1.25rem;align-items:stretch;margin-top:1rem}'
+        . '.streamvoice-answer video{display:block;width:min(100%,32rem);max-width:32rem;height:auto;flex:0 1 32rem;align-self:flex-start;margin:0;background:#1d2125;border-radius:.25rem}'
+        . '.streamvoice-answer .sv-side{flex:1 1 16rem;min-width:min(100%,16rem);display:flex;flex-direction:column}'
+        . '.streamvoice-answer .sv-label{font-weight:700;margin:0 0 .35rem}'
+        . '.streamvoice-answer pre{flex:1;white-space:pre-wrap;min-height:8rem;max-height:22rem;overflow:auto;margin:0;background:#f8f9fa;border-radius:.25rem;padding:.75rem}'
+    );
+    $html .= $OUTPUT->heading(get_string('answers', 'streamvoice'), 3, 'h4 mt-4');
+    if (!is_array($answers) || !$answers) {
+        return $html . $OUTPUT->notification(get_string('noanswers', 'streamvoice'), 'info');
+    }
+
+    $number = 1;
+    foreach ($answers as $answer) {
+        if (!is_array($answer)) {
+            continue;
         }
+        $head = html_writer::start_div('d-flex align-items-baseline flex-wrap');
+        $head .= html_writer::tag('h4', $number . '. ' . s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-0']);
+        if (isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
+            $head .= html_writer::span(
+                get_string('answerscore', 'streamvoice') . ' ' . s((string) $answer['score']),
+                'text-nowrap font-weight-bold',
+                ['style' => 'margin-inline-start:.75rem']
+            );
+        }
+        $head .= html_writer::end_div();
+
+        $media = (string) ($answer['media'] ?? '');
+        $video = '';
+        if ($media !== '') {
+            $video = html_writer::tag('video', '', [
+                'controls' => 'controls',
+                'preload' => 'metadata',
+                'src' => $media,
+            ]);
+        }
+        $side = '';
+        if (!empty($answer['feedback'])) {
+            $side .= html_writer::div(format_text((string) $answer['feedback'], FORMAT_PLAIN), 'mb-3');
+        }
+        if (!empty($answer['transcript'])) {
+            $side .= html_writer::div(get_string('transcript', 'streamvoice'), 'sv-label');
+            $side .= html_writer::tag('pre', s((string) $answer['transcript']));
+        }
+        $body = html_writer::start_div('sv-body');
+        $body .= $video;
+        if ($side !== '') {
+            $body .= html_writer::div($side, 'sv-side');
+        }
+        $body .= html_writer::end_div();
+        $html .= $OUTPUT->box($head . $body, 'generalbox streamvoice-answer');
+        $number++;
     }
     return $html;
 }

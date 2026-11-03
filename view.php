@@ -82,7 +82,11 @@ require_capability('mod/streamvoice:view', $context);
 
 $action = optional_param('action', '', PARAM_ALPHA);
 $pageurl = new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id]);
-$PAGE->set_url($pageurl);
+if ($action === 'defense') {
+    $PAGE->set_url(new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id, 'action' => 'defense']));
+} else {
+    $PAGE->set_url($pageurl);
+}
 $PAGE->set_title(format_string($instance->name));
 $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
@@ -199,6 +203,15 @@ if ($action === 'editsubmission' && $form) {
     exit;
 }
 
+if ($action === 'defense' && $submission && $client->is_configured()) {
+    echo html_writer::start_div('mb-3');
+    echo $OUTPUT->single_button($pageurl, get_string('back'), 'get');
+    echo html_writer::end_div();
+    echo streamvoice_view_defense($client, $cm, $instance, $USER);
+    echo $OUTPUT->footer();
+    exit;
+}
+
 if ($cangrade) {
     $gradeurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id]);
     echo html_writer::start_div('container-fluid tertiary-navigation');
@@ -224,23 +237,48 @@ if ($seeownsummary) {
     }
     echo streamvoice_view_submission_status($instance, $submission);
 }
-if ($action === 'defense' && $submission && $client->is_configured()) {
-    $launch = $client->issue_launch((int) $cm->id, $USER, 'student');
-    if ($launch['ok'] && !empty($launch['data']['url'])) {
-        echo $OUTPUT->heading(get_string('defensehdr', 'streamvoice'), 3);
-        echo $OUTPUT->notification(get_string('lockednotice', 'streamvoice'), 'info');
-        echo html_writer::tag('iframe', '', [
-            'src' => $launch['data']['url'],
-            'allow' => 'camera; microphone; autoplay',
-            'style' => 'width:100%;min-height:80vh;border:0;background:#fff;',
-            'title' => format_string($instance->name),
-        ]);
-    } else if (!$launch['ok']) {
-        echo $OUTPUT->notification(streamvoice_error_text($launch), 'error');
-    }
-}
-
 echo $OUTPUT->footer();
+
+/**
+ * Defense screen. One page scroll, with the activity footer after the task.
+ *
+ * @param \mod_streamvoice\client $client
+ * @param \stdClass $cm
+ * @param \stdClass $instance
+ * @param \stdClass $user
+ * @return string
+ */
+function streamvoice_view_defense($client, $cm, $instance, $user): string {
+    global $OUTPUT;
+
+    $launch = $client->issue_launch((int) $cm->id, $user, 'student');
+    if (!$launch['ok'] || empty($launch['data']['url'])) {
+        return $OUTPUT->notification(streamvoice_error_text($launch), 'error');
+    }
+
+    $frameid = 'streamvoice-frame';
+    $html = html_writer::tag('iframe', '', [
+        'id' => $frameid,
+        'src' => $launch['data']['url'],
+        'allow' => 'camera; microphone; autoplay',
+        'title' => format_string($instance->name),
+        'style' => 'display:block;width:100%;height:36rem;border:1px solid #dee2e6;border-radius:0.5rem;background:#fff;',
+    ]);
+    $html .= html_writer::script(
+        "(function () {\n"
+        . "    var frame = document.getElementById(" . json_encode($frameid) . ");\n"
+        . "    if (!frame) { return; }\n"
+        . "    window.addEventListener('message', function (event) {\n"
+        . "        if (event.source !== frame.contentWindow) { return; }\n"
+        . "        var data = event.data || {};\n"
+        . "        if (data.type !== 'streamvoice-height') { return; }\n"
+        . "        var height = parseInt(data.height, 10);\n"
+        . "        if (height >= 240 && height <= 8000) { frame.style.height = (height + 2) + 'px'; }\n"
+        . "    });\n"
+        . "})();"
+    );
+    return $html;
+}
 
 /**
  * Save the picked file through Stream and lock it.

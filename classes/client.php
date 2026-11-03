@@ -136,6 +136,22 @@ class client {
     }
 
     /**
+     * Questions, recordings and scores for one submission. Moodle draws them.
+     *
+     * @param int $cmid
+     * @param int $submissionid
+     * @return array{ok: bool, message: string, code: string, data: array<string, mixed>}
+     */
+    public function submission_report(int $cmid, int $submissionid): array {
+        return $this->post_json([
+            'action' => 'submission_report',
+            'host' => self::host(),
+            'cmid' => $cmid,
+            'submissionid' => $submissionid,
+        ]);
+    }
+
+    /**
      * @param int $cmid
      * @param \stdClass $user
      * @param string $role student|teacher

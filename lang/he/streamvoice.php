@@ -75,6 +75,12 @@ $string['status_prep'] = 'בזמן הכנה';
 $string['status_recording'] = 'בהקלטה';
 $string['backtosubmissions'] = 'חזרה להגשות';
 $string['report'] = 'דוח Stream Voice';
+$string['answers'] = 'תשובות';
+$string['answerscore'] = 'ציון';
+$string['transcript'] = 'תמלול';
+$string['consistency'] = 'עקביות מול הקובץ';
+$string['oralscore'] = 'הסבר בעל פה';
+$string['noanswers'] = 'עדיין אין תשובות מוקלטות.';
 $string['none'] = 'עדיין אין פעילות Stream Voice בקורס הזה.';
 
 $string['streamnotconfigured'] = 'Stream לא מוגדר. הגדירו כתובת ומפתח API תחת ניהול האתר ← תוספים ← תוספים מקומיים ← Stream.';

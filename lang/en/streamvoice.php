@@ -75,6 +75,12 @@ $string['status_prep'] = 'Preparing';
 $string['status_recording'] = 'Recording';
 $string['backtosubmissions'] = 'Back to submissions';
 $string['report'] = 'Stream Voice report';
+$string['answers'] = 'Answers';
+$string['answerscore'] = 'Score';
+$string['transcript'] = 'Transcript';
+$string['consistency'] = 'Consistency with the file';
+$string['oralscore'] = 'Oral explanation';
+$string['noanswers'] = 'No recorded answers yet.';
 $string['none'] = 'There is no Stream Voice activity in this course yet.';
 
 $string['streamnotconfigured'] = 'Stream is not configured. Set the Stream URL and API key in Site administration → Plugins → Local plugins → Stream.';
