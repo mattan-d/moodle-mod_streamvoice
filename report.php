@@ -32,7 +32,11 @@ global $DB, $USER, $PAGE, $OUTPUT;
 $id = required_param('id', PARAM_INT);
 $statusfilter = optional_param('status', '', PARAM_ALPHA);
 $search = trim(optional_param('search', '', PARAM_NOTAGS));
+$sifirst = streamvoice_report_letter(optional_param('sifirst', '', PARAM_RAW));
+$silast = streamvoice_report_letter(optional_param('silast', '', PARAM_RAW));
+$page = optional_param('page', 0, PARAM_INT);
 $userid = optional_param('userid', 0, PARAM_INT);
+$download = optional_param('download', 0, PARAM_BOOL);
 
 $cm = get_coursemodule_from_id('streamvoice', $id, 0, false, MUST_EXIST);
 $course = $DB->get_record('course', ['id' => $cm->course], '*', MUST_EXIST);
@@ -48,6 +52,15 @@ if ($statusfilter !== '') {
 }
 if ($search !== '') {
     $pageurl->param('search', $search);
+}
+if ($sifirst !== '') {
+    $pageurl->param('sifirst', $sifirst);
+}
+if ($silast !== '') {
+    $pageurl->param('silast', $silast);
+}
+if ($page > 0) {
+    $pageurl->param('page', $page);
 }
 
 $PAGE->set_url($pageurl);
@@ -91,6 +104,21 @@ foreach ($submissions as $row) {
     }
 }
 
+if ($download && $userid) {
+    streamvoice_report_download($client, $cm, $byuser[$userid] ?? null);
+}
+
+$gradesaved = streamvoice_report_save_grades($instance, $context);
+if ($gradesaved === true) {
+    $back = new moodle_url($pageurl);
+    if ($userid) {
+        $back->param('userid', $userid);
+    }
+    redirect($back, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
+} else if (is_string($gradesaved)) {
+    $notices[] = [$gradesaved, 'error'];
+}
+
 if ($userid) {
     $user = $users[$userid] ?? $DB->get_record('user', ['id' => $userid, 'deleted' => 0]);
     if (!$user) {
@@ -124,16 +152,49 @@ foreach ($users as $user) {
             continue;
         }
     }
+    if ($sifirst !== '' && streamvoice_report_letter($user->firstname) !== $sifirst) {
+        continue;
+    }
+    if ($silast !== '' && streamvoice_report_letter($user->lastname) !== $silast) {
+        continue;
+    }
     $visible[] = $user;
 }
+
+$perpage = (int) get_config('moodlecourse', 'participantsperpage');
+if ($perpage < 1) {
+    $perpage = 20;
+}
+$usercount = count($visible);
+$lastpage = $usercount > 0 ? (int) ceil($usercount / $perpage) - 1 : 0;
+if ($page < 0 || $page > $lastpage) {
+    $page = 0;
+    $pageurl->remove_params('page');
+}
+$pageusers = array_slice($visible, $page * $perpage, $perpage);
 
 $gradinginfo = $users
     ? grade_get_grades($course->id, 'mod', 'streamvoice', $instance->id, array_keys($users))
     : (object) ['items' => []];
 
 streamvoice_report_page_start($notices);
-echo streamvoice_report_actionbar($cm, $course, $statusfilter, $search);
-echo streamvoice_report_table($cm, $course, $instance, $visible, $byuser, $gradinginfo, $pageurl);
+echo streamvoice_report_actionbar($cm, $course, $statusfilter, $search, $sifirst, $silast);
+echo streamvoice_report_initials($pageurl, $sifirst, $silast);
+echo streamvoice_report_paging($usercount, $page, $perpage, $pageurl);
+echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
+echo streamvoice_report_table($cm, $course, $instance, $pageusers, $byuser, $gradinginfo, $pageurl);
+echo html_writer::div(
+    html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'value' => get_string('savechanges'),
+        'class' => 'btn btn-primary',
+    ]),
+    'mt-3'
+);
+echo html_writer::end_tag('form');
+echo streamvoice_report_paging($usercount, $page, $perpage, $pageurl);
 echo $OUTPUT->footer();
 
 /**
@@ -196,21 +257,209 @@ function streamvoice_report_participants(\context_module $context, array $submis
 }
 
 /**
+ * First letter of a name, using the same case as Moodle's initials bar.
+ *
+ * @param string $value
+ * @return string
+ */
+function streamvoice_report_letter(string $value): string {
+    $value = trim($value);
+    if ($value === '') {
+        return '';
+    }
+    $letter = core_text::strtoupper(core_text::substr($value, 0, 1));
+    if ($letter === '' || !preg_match('/^\p{L}$/u', $letter)) {
+        return '';
+    }
+    return $letter;
+}
+
+/**
+ * First-name and last-name letter bars, as on the participants page.
+ *
+ * @param \moodle_url $pageurl
+ * @param string $sifirst
+ * @param string $silast
+ * @return string
+ */
+function streamvoice_report_initials(moodle_url $pageurl, string $sifirst, string $silast): string {
+    global $OUTPUT;
+    $url = new moodle_url($pageurl);
+    $url->remove_params('page');
+    $html = html_writer::start_div('initialbars mb-3');
+    $html .= $OUTPUT->initials_bar($sifirst, 'firstinitial', get_string('firstname'), 'sifirst', $url);
+    $html .= $OUTPUT->initials_bar($silast, 'lastinitial', get_string('lastname'), 'silast', $url);
+    $html .= html_writer::end_div();
+    return $html;
+}
+
+/**
+ * Page links for the submissions list.
+ *
+ * @param int $total
+ * @param int $page
+ * @param int $perpage
+ * @param \moodle_url $pageurl
+ * @return string
+ */
+function streamvoice_report_paging(int $total, int $page, int $perpage, moodle_url $pageurl): string {
+    global $OUTPUT;
+    if ($total <= $perpage) {
+        return '';
+    }
+    $bar = new paging_bar($total, $page, $perpage, $pageurl);
+    $bar->pagevar = 'page';
+    return $OUTPUT->render($bar);
+}
+
+/**
+ * Download the locked file for one submission.
+ *
+ * @param \mod_streamvoice\client $client
+ * @param \stdClass $cm
+ * @param array<string, mixed>|null $row
+ */
+function streamvoice_report_download($client, \stdClass $cm, ?array $row): void {
+    if (!$row || empty($row['id']) || trim((string) ($row['artifactname'] ?? '')) === '') {
+        throw new moodle_exception('filenotfound', 'error');
+    }
+    $file = $client->download_artifact((int) $cm->id, (int) $row['id']);
+    if (!$file['ok']) {
+        throw new moodle_exception('filenotfound', 'error');
+    }
+    $name = clean_filename(basename(str_replace('\\', '/', (string) $row['artifactname'])));
+    if ($name === '' || $name === '.') {
+        $name = 'submission';
+    }
+    \core\session\manager::write_close();
+    header('Content-Type: ' . mimeinfo('type', $name));
+    header('Content-Length: ' . strlen($file['body']));
+    header('Content-Disposition: attachment; filename="' . rawurlencode($name) . '"; filename*=UTF-8\'\'' . rawurlencode($name));
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    echo $file['body'];
+    exit;
+}
+
+/**
+ * Save marker edits from the submissions table. Unchanged values are left alone.
+ *
+ * @param \stdClass $instance
+ * @param \context $context
+ * @return true|string|null true when saved, an error string, or null when this is not a save
+ */
+function streamvoice_report_save_grades(\stdClass $instance, \context $context) {
+    if (!data_submitted() || !confirm_sesskey() || !optional_param('savegrades', 0, PARAM_BOOL)) {
+        return null;
+    }
+    $grademax = (int) ($instance->grade ?? 0);
+    if ($grademax <= 0) {
+        return null;
+    }
+    $posted = optional_param_array('grade', [], PARAM_RAW);
+    $original = optional_param_array('gradeorig', [], PARAM_RAW);
+    if (!$posted) {
+        return null;
+    }
+    $updates = [];
+    foreach ($posted as $userid => $raw) {
+        $userid = (int) $userid;
+        if ($userid <= 0 || !is_enrolled($context, $userid, '', true)) {
+            continue;
+        }
+        $raw = trim((string) $raw);
+        $was = trim((string) ($original[$userid] ?? ''));
+        if ($raw === '' || $raw === $was) {
+            continue;
+        }
+        $value = unformat_float($raw, true);
+        if ($value === false || $value < 0 || $value > $grademax) {
+            return get_string('gradeoutofrange', 'streamvoice', format_float($grademax, 2));
+        }
+        $previous = unformat_float($was, true);
+        if ($previous !== false && !grade_floats_different((float) $value, (float) $previous)) {
+            continue;
+        }
+        $updates[$userid] = (float) $value;
+    }
+    foreach ($updates as $userid => $value) {
+        if (!streamvoice_set_teacher_grade($instance, $userid, $value)) {
+            return get_string('error');
+        }
+    }
+    return $updates ? true : null;
+}
+
+/**
+ * Editable final grade. The hidden field remembers what was shown, so an untouched score is not overridden.
+ *
+ * @param \stdClass $user
+ * @param array<string, mixed>|null $row
+ * @param \stdClass|null $gradeobj
+ * @return string
+ */
+function streamvoice_report_grade_input(\stdClass $user, ?array $row, $gradeobj): string {
+    $book = null;
+    if ($gradeobj && isset($gradeobj->grade) && $gradeobj->grade !== null && $gradeobj->grade !== '') {
+        $book = (float) $gradeobj->grade;
+    }
+    $auto = null;
+    if ($row && array_key_exists('points', $row) && $row['points'] !== null && $row['points'] !== '') {
+        $auto = (float) $row['points'];
+    }
+    $shown = $book !== null ? $book : $auto;
+    $display = $shown === null ? '' : format_float($shown, 2);
+    $id = 'streamvoice-grade-' . (int) $user->id;
+    $html = html_writer::empty_tag('input', [
+        'type' => 'text',
+        'name' => 'grade[' . (int) $user->id . ']',
+        'id' => $id,
+        'value' => $display,
+        'class' => 'form-control',
+        'dir' => 'ltr',
+        'size' => 6,
+        'style' => 'width:6rem;unicode-bidi:isolate',
+        'aria-label' => get_string('finalgrade', 'grades') . ' ' . fullname($user),
+    ]);
+    $html .= html_writer::empty_tag('input', [
+        'type' => 'hidden',
+        'name' => 'gradeorig[' . (int) $user->id . ']',
+        'value' => $display,
+    ]);
+    return $html;
+}
+
+/**
  * The submissions bar used on the assignment grading page.
  *
  * @param \stdClass $cm
  * @param \stdClass $course
  * @param string $statusfilter
  * @param string $search
+ * @param string $sifirst
+ * @param string $silast
  * @return string
  */
-function streamvoice_report_actionbar(\stdClass $cm, \stdClass $course, string $statusfilter, string $search): string {
+function streamvoice_report_actionbar(
+    \stdClass $cm,
+    \stdClass $course,
+    string $statusfilter,
+    string $search,
+    string $sifirst,
+    string $silast
+): string {
     global $OUTPUT;
 
     $base = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id]);
     $selecturl = new moodle_url($base);
     if ($search !== '') {
         $selecturl->param('search', $search);
+    }
+    if ($sifirst !== '') {
+        $selecturl->param('sifirst', $sifirst);
+    }
+    if ($silast !== '') {
+        $selecturl->param('silast', $silast);
     }
     $options = [
         '' => get_string('all'),
@@ -235,6 +484,12 @@ function streamvoice_report_actionbar(\stdClass $cm, \stdClass $course, string $
     if ($statusfilter !== '') {
         $searchform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'status', 'value' => $statusfilter]);
     }
+    if ($sifirst !== '') {
+        $searchform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sifirst', 'value' => $sifirst]);
+    }
+    if ($silast !== '') {
+        $searchform .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'silast', 'value' => $silast]);
+    }
     $searchform .= html_writer::empty_tag('input', [
         'type' => 'text',
         'name' => 'search',
@@ -248,7 +503,10 @@ function streamvoice_report_actionbar(\stdClass $cm, \stdClass $course, string $
     $html .= html_writer::div('', 'navitem-divider d-none d-sm-flex');
 
     if (groups_get_activity_groupmode($cm, $course)) {
-        $groupurl = new moodle_url($base, $statusfilter !== '' ? ['status' => $statusfilter] : null);
+        $groupurl = new moodle_url($selecturl);
+        if ($statusfilter !== '') {
+            $groupurl->param('status', $statusfilter);
+        }
         $html .= html_writer::div(groups_print_activity_menu($cm, $groupurl->out(), true), 'navitem');
         $html .= html_writer::div('', 'navitem-divider d-none d-sm-flex');
     }
@@ -322,23 +580,34 @@ function streamvoice_report_table(
         }
 
         if ($row && array_key_exists('points', $row) && $row['points'] !== null) {
-            $grade = format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2);
+            $grade = html_writer::span(
+                format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2),
+                '',
+                ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
+            );
         } else {
             $grade = '-';
         }
 
-        $filename = $row ? s((string) ($row['artifactname'] ?? '')) : '-';
-        if ($filename === '') {
+        $artifact = trim((string) ($row['artifactname'] ?? ''));
+        if ($row && $artifact !== '') {
+            $fileurl = new moodle_url('/mod/streamvoice/report.php', [
+                'id' => $cm->id,
+                'userid' => $user->id,
+                'download' => 1,
+            ]);
+            $filename = html_writer::link($fileurl, s($artifact));
+        } else {
             $filename = '-';
         }
         $modified = (int) ($row['timemodified'] ?? 0);
         $timemodified = $modified > 0 ? userdate($modified) : '-';
 
-        $final = '-';
         $itemgrades = $gradinginfo->items[0]->grades ?? null;
-        if (is_array($itemgrades) && isset($itemgrades[$user->id]->str_grade) && $itemgrades[$user->id]->str_grade !== '') {
-            $final = $itemgrades[$user->id]->str_grade;
-        }
+        $gradeobj = (is_array($itemgrades) && isset($itemgrades[$user->id])) ? $itemgrades[$user->id] : null;
+        $final = $grademax > 0
+            ? streamvoice_report_grade_input($user, $row, $gradeobj)
+            : '-';
 
         $table->add_data([$fullname, $status, $grade, $filename, $timemodified, $final]);
     }
@@ -405,14 +674,63 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
         $grade = (array_key_exists('points', $row) && $row['points'] !== null)
             ? format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2)
             : '-';
-        $summary->data[] = streamvoice_report_row(
-            get_string('gradenoun'),
-            html_writer::span($grade, '', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate'])
-        );
+        $gradecell = html_writer::span($grade, '', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']);
+        $weights = is_array($report['weights'] ?? null) ? $report['weights'] : [];
+        if ($grade !== '-'
+                && isset($report['consistency'], $report['oral'], $weights['file'], $weights['oral'])
+                && $report['consistency'] !== null && $report['oral'] !== null) {
+            $gradecell .= html_writer::div(
+                get_string('gradebreakdown', 'streamvoice', (object) [
+                    'grade' => format_float((float) $row['points'], 2),
+                    'consistency' => format_float((float) $report['consistency'], 1),
+                    'fileweight' => (int) $weights['file'],
+                    'oral' => format_float((float) $report['oral'], 1),
+                    'oralweight' => (int) $weights['oral'],
+                ]),
+                'text-muted small',
+                ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
+            );
+        }
+        $summary->data[] = streamvoice_report_row(get_string('gradenoun'), $gradecell);
+        $artifact = trim((string) ($row['artifactname'] ?? ''));
+        if ($artifact !== '') {
+            $fileurl = new moodle_url('/mod/streamvoice/report.php', [
+                'id' => $cm->id,
+                'userid' => $user->id,
+                'download' => 1,
+            ]);
+            $filecell = html_writer::link($fileurl, s($artifact));
+        } else {
+            $filecell = '-';
+        }
         $summary->data[] = streamvoice_report_row(
             get_string('pluginname', 'assignsubmission_file'),
-            s((string) ($row['artifactname'] ?? ''))
+            $filecell
         );
+        if ($grademax > 0) {
+            $gradeobj = null;
+            $info = grade_get_grades($course->id, 'mod', 'streamvoice', $instance->id, [$user->id]);
+            $itemgrades = $info->items[0]->grades ?? null;
+            if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
+                $gradeobj = $itemgrades[$user->id];
+            }
+            $editor = html_writer::start_tag('form', [
+                'method' => 'post',
+                'action' => (new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]))->out(false),
+                'class' => 'd-flex align-items-center',
+            ]);
+            $editor .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+            $editor .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
+            $editor .= streamvoice_report_grade_input($user, $row, $gradeobj);
+            $editor .= html_writer::empty_tag('input', [
+                'type' => 'submit',
+                'value' => get_string('savechanges'),
+                'class' => 'btn btn-secondary',
+                'style' => 'margin-inline-start:.5rem',
+            ]);
+            $editor .= html_writer::end_tag('form');
+            $summary->data[] = streamvoice_report_row(get_string('finalgrade', 'grades'), $editor);
+        }
         if (isset($report['consistency']) && $report['consistency'] !== null) {
             $summary->data[] = streamvoice_report_row(
                 get_string('consistency', 'streamvoice'),

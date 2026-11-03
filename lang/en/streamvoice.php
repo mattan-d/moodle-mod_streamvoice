@@ -77,9 +77,11 @@ $string['backtosubmissions'] = 'Back to submissions';
 $string['report'] = 'Stream Voice report';
 $string['answers'] = 'Answers';
 $string['answerscore'] = 'Score';
+$string['gradeoutofrange'] = 'Enter a grade between 0 and {$a}.';
 $string['transcript'] = 'Transcript';
 $string['consistency'] = 'Consistency with the file';
 $string['oralscore'] = 'Oral explanation';
+$string['gradebreakdown'] = '{$a->grade} = consistency {$a->consistency} × {$a->fileweight}% + oral {$a->oral} × {$a->oralweight}%';
 $string['noanswers'] = 'No recorded answers yet.';
 $string['none'] = 'There is no Stream Voice activity in this course yet.';
 

@@ -271,6 +271,33 @@ function streamvoice_update_grades($instance, $userid, $rawgrade = null, $feedba
 }
 
 /**
+ * Store a marker's grade. It is marked overridden so a later automatic score does not replace it.
+ *
+ * @param \stdClass $instance
+ * @param int $userid
+ * @param float $finalgrade
+ * @return bool
+ */
+function streamvoice_set_teacher_grade(\stdClass $instance, int $userid, float $finalgrade): bool {
+    global $CFG;
+    require_once($CFG->libdir . '/gradelib.php');
+    require_once($CFG->libdir . '/grade/grade_item.php');
+
+    streamvoice_grade_item_update($instance);
+    $item = \grade_item::fetch([
+        'courseid' => $instance->course,
+        'itemtype' => 'mod',
+        'itemmodule' => 'streamvoice',
+        'iteminstance' => $instance->id,
+        'itemnumber' => 0,
+    ]);
+    if (!$item) {
+        return false;
+    }
+    return (bool) $item->update_final_grade($userid, $finalgrade, 'mod/streamvoice');
+}
+
+/**
  * @param \stdClass $cm
  * @return \cached_cm_info|null
  */

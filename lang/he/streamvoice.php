@@ -77,9 +77,11 @@ $string['backtosubmissions'] = 'חזרה להגשות';
 $string['report'] = 'דוח Stream Voice';
 $string['answers'] = 'תשובות';
 $string['answerscore'] = 'ציון';
+$string['gradeoutofrange'] = 'הציון חייב להיות בין 0 ל-{$a}.';
 $string['transcript'] = 'תמלול';
 $string['consistency'] = 'עקביות מול הקובץ';
 $string['oralscore'] = 'הסבר בעל פה';
+$string['gradebreakdown'] = '{$a->grade} = עקביות {$a->consistency} × {$a->fileweight}% + הסבר בעל פה {$a->oral} × {$a->oralweight}%';
 $string['noanswers'] = 'עדיין אין תשובות מוקלטות.';
 $string['none'] = 'עדיין אין פעילות Stream Voice בקורס הזה.';
 

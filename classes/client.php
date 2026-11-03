@@ -152,6 +152,53 @@ class client {
     }
 
     /**
+     * The locked file a student submitted. Returned as bytes for the marker to download.
+     *
+     * @param int $cmid
+     * @param int $submissionid
+     * @return array{ok: bool, message: string, code: string, body: string, type: string}
+     */
+    public function download_artifact(int $cmid, int $submissionid): array {
+        if (!self::is_configured()) {
+            return $this->fail('not_configured', get_string('streamnotconfigured', 'streamvoice')) + ['body' => '', 'type' => ''];
+        }
+        $url = self::base_url() . '/webservice/api/streamvoice';
+        $curl = new \curl();
+        $curl->setHeader([
+            'Authorization: Bearer ' . self::api_key(),
+            'Content-Type: application/json',
+        ]);
+        $curl->setopt([
+            'CURLOPT_TIMEOUT' => 60,
+            'CURLOPT_CONNECTTIMEOUT' => 10,
+        ]);
+        try {
+            $body = $curl->post($url, json_encode([
+                'action' => 'artifact',
+                'host' => self::host(),
+                'cmid' => $cmid,
+                'submissionid' => $submissionid,
+            ]));
+        } catch (\Throwable $e) {
+            return $this->fail('unreachable', get_string('error_unreachable', 'streamvoice')) + ['body' => '', 'type' => ''];
+        }
+        $info = $curl->get_info();
+        $http = (int) ($info['http_code'] ?? 0);
+        $type = (string) ($info['content_type'] ?? '');
+        if ($http !== 200 || stripos($type, 'application/json') !== false || !is_string($body)) {
+            $data = json_decode((string) $body, true);
+            return [
+                'ok' => false,
+                'code' => is_array($data) ? (string) ($data['code'] ?? 'stream') : 'unreachable',
+                'message' => is_array($data) ? (string) ($data['message'] ?? '') : '',
+                'body' => '',
+                'type' => '',
+            ];
+        }
+        return ['ok' => true, 'code' => '', 'message' => '', 'body' => $body, 'type' => $type];
+    }
+
+    /**
      * @param int $cmid
      * @param \stdClass $user
      * @param string $role student|teacher
