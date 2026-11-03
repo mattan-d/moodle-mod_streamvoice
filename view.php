@@ -262,7 +262,7 @@ function streamvoice_view_defense($client, $cm, $instance, $user): string {
         'src' => $launch['data']['url'],
         'allow' => 'camera; microphone; autoplay',
         'title' => format_string($instance->name),
-        'style' => 'display:block;width:100%;height:36rem;border:1px solid #dee2e6;border-radius:0.5rem;background:#fff;',
+        'style' => 'display:block;width:100%;height:36rem;border:0;background:transparent;',
     ]);
     $html .= html_writer::script(
         "(function () {\n"
