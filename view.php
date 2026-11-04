@@ -260,7 +260,8 @@ function streamvoice_view_defense($client, $cm, $instance, $user): string {
     $html = html_writer::tag('iframe', '', [
         'id' => $frameid,
         'src' => $launch['data']['url'],
-        'allow' => 'camera; microphone; autoplay',
+        'allow' => 'camera; microphone; autoplay; fullscreen',
+        'allowfullscreen' => 'allowfullscreen',
         'title' => format_string($instance->name),
         'style' => 'display:block;width:100%;height:36rem;border:0;background:transparent;',
     ]);
