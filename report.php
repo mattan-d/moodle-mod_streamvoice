@@ -768,7 +768,7 @@ function streamvoice_report_answers($answers): string {
 
     $html = html_writer::tag('style',
         '.streamvoice-answer .sv-body{display:flex;flex-wrap:wrap;gap:1.25rem;align-items:stretch;margin-top:1rem}'
-        . '.streamvoice-answer video{display:block;width:min(100%,32rem);max-width:32rem;height:auto;flex:0 1 32rem;align-self:flex-start;margin:0;background:#1d2125;border-radius:.25rem}'
+        . '.streamvoice-answer video,.streamvoice-answer iframe.sv-player{display:block;width:min(100%,32rem);max-width:32rem;aspect-ratio:16/9;flex:0 1 32rem;align-self:flex-start;margin:0;border:0;border-radius:.25rem;background:#1d2125}'
         . '.streamvoice-answer .sv-side{flex:1 1 16rem;min-width:min(100%,16rem);display:flex;flex-direction:column}'
         . '.streamvoice-answer .sv-label{font-weight:700;margin:0 0 .35rem}'
         . '.streamvoice-answer pre{flex:1;white-space:pre-wrap;min-height:8rem;max-height:22rem;overflow:auto;margin:0;background:#f8f9fa;border-radius:.25rem;padding:.75rem}'
@@ -795,8 +795,31 @@ function streamvoice_report_answers($answers): string {
         $head .= html_writer::end_div();
 
         $media = (string) ($answer['media'] ?? '');
+        $embed = (string) ($answer['embed'] ?? '');
+        if ($embed === '' && $media !== '') {
+            $parts = parse_url($media);
+            $query = [];
+            if (is_array($parts)) {
+                parse_str((string) ($parts['query'] ?? ''), $query);
+            }
+            $playid = (int) ($query['videoid'] ?? 0);
+            $playtoken = (string) ($query['token'] ?? '');
+            if ($playid > 0 && $playtoken !== '' && !empty($parts['host'])) {
+                $embed = ($parts['scheme'] ?? 'https') . '://' . $parts['host']
+                    . (isset($parts['port']) ? ':' . $parts['port'] : '')
+                    . '/embed/' . $playid . '?sv=' . rawurlencode($playtoken);
+            }
+        }
         $video = '';
-        if ($media !== '') {
+        if ($embed !== '') {
+            $video = html_writer::tag('iframe', '', [
+                'class' => 'sv-player',
+                'src' => $embed,
+                'title' => get_string('answers', 'streamvoice'),
+                'allow' => 'autoplay; fullscreen; encrypted-media',
+                'allowfullscreen' => 'allowfullscreen',
+            ]);
+        } else if ($media !== '') {
             $video = html_writer::tag('video', '', [
                 'controls' => 'controls',
                 'preload' => 'metadata',
