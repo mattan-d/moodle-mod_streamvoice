@@ -146,17 +146,8 @@ function streamvoice_course_module_created(\core\event\course_module_created $ev
  * @param array<string, mixed> $row
  */
 function streamvoice_apply_remote_grade(\stdClass $instance, array $row): void {
-    if ((int) $instance->grade <= 0) {
-        return;
-    }
-    if (!array_key_exists('points', $row) || $row['points'] === null) {
-        return;
-    }
-    $userid = (int) ($row['moodleuserid'] ?? 0);
-    if ($userid <= 0) {
-        return;
-    }
-    streamvoice_update_grades($instance, $userid, (float) $row['points'], (string) ($row['summary'] ?? ''));
+    // The recommended score stays in Stream for the teacher. The gradebook
+    // receives a grade only when the teacher saves a final grade.
 }
 
 /**
@@ -254,34 +245,30 @@ function streamvoice_grade_item_update($streamvoice, $grades = null, $delete = f
 }
 
 /**
+ * Moodle asks the activity for its grades when the course gradebook is refreshed.
+ * The saved final grade already lives in the gradebook, so a refresh must not replace it.
+ *
  * @param \stdClass $instance
  * @param int $userid
- * @param float|null $rawgrade
- * @param string|null $feedback
  */
-function streamvoice_update_grades($instance, $userid, $rawgrade = null, $feedback = null) {
-    $grades = new \stdClass();
-    $grades->userid = $userid;
-    $grades->rawgrade = $rawgrade;
-    if ($feedback !== null) {
-        $grades->feedback = $feedback;
-        $grades->feedbackformat = FORMAT_PLAIN;
-    }
-    streamvoice_grade_item_update($instance, $grades);
+function streamvoice_update_grades($instance, $userid = 0) {
+    streamvoice_grade_item_update($instance);
 }
 
 /**
- * Store a marker's grade. It is marked overridden so a later automatic score does not replace it.
+ * Store the teacher's final grade in the course gradebook and recalculate the course total.
  *
  * @param \stdClass $instance
  * @param int $userid
  * @param float $finalgrade
+ * @param string|null $feedback Written feedback. Null leaves the existing feedback unchanged.
  * @return bool
  */
-function streamvoice_set_teacher_grade(\stdClass $instance, int $userid, float $finalgrade): bool {
+function streamvoice_set_teacher_grade(\stdClass $instance, int $userid, float $finalgrade, ?string $feedback = null): bool {
     global $CFG;
     require_once($CFG->libdir . '/gradelib.php');
     require_once($CFG->libdir . '/grade/grade_item.php');
+    require_once($CFG->libdir . '/grade/grade_grade.php');
 
     streamvoice_grade_item_update($instance);
     $item = \grade_item::fetch([
@@ -291,10 +278,70 @@ function streamvoice_set_teacher_grade(\stdClass $instance, int $userid, float $
         'iteminstance' => $instance->id,
         'itemnumber' => 0,
     ]);
-    if (!$item) {
+    if (!$item || (int) $item->gradetype === GRADE_TYPE_NONE) {
         return false;
     }
-    return (bool) $item->update_final_grade($userid, $finalgrade, 'mod/streamvoice');
+
+    $existing = \grade_grade::fetch(['itemid' => $item->id, 'userid' => $userid]);
+    if ($existing && !empty($existing->overridden)) {
+        $existing->grade_item = $item;
+        $existing->set_overridden(false, false);
+    }
+
+    $grades = new \stdClass();
+    $grades->userid = $userid;
+    $grades->rawgrade = $finalgrade;
+    if ($feedback !== null) {
+        $grades->feedback = $feedback;
+        $grades->feedbackformat = FORMAT_PLAIN;
+    }
+    if (streamvoice_grade_item_update($instance, $grades) != GRADE_UPDATE_OK) {
+        return false;
+    }
+
+    $regraded = grade_regrade_final_grades($instance->course, $userid, $item);
+    if ($regraded !== true) {
+        $regraded = grade_regrade_final_grades($instance->course);
+    }
+    if ($regraded !== true) {
+        return false;
+    }
+
+    $saved = \grade_grade::fetch(['itemid' => $item->id, 'userid' => $userid]);
+    return $saved && $saved->finalgrade !== null
+        && !grade_floats_different((float) $saved->finalgrade, $finalgrade);
+}
+
+/**
+ * Scale a 0–100 AI score onto the activity grade range.
+ *
+ * @param mixed $score
+ * @param int $grademax
+ * @return float|null
+ */
+function streamvoice_scale_score($score, int $grademax): ?float {
+    if ($score === null || $score === '') {
+        return null;
+    }
+    return round(((float) $score) / 100 * $grademax, 2);
+}
+
+/**
+ * Final grade from the teacher's work grade and defense grade.
+ *
+ * @param \stdClass $instance
+ * @param float $work
+ * @param float $defense
+ * @return float
+ */
+function streamvoice_compose_grade(\stdClass $instance, float $work, float $defense): float {
+    $file = (int) ($instance->weightfile ?? 40);
+    $oral = (int) ($instance->weightoral ?? 60);
+    if ($file < 0 || $oral < 0 || $file + $oral !== 100) {
+        $file = 40;
+        $oral = 60;
+    }
+    return round(($work * $file + $defense * $oral) / 100, 2);
 }
 
 /**
@@ -406,7 +453,7 @@ function streamvoice_grading_lines(?array $row): array {
 
     $reportstatus = (string) ($row['reportstatus'] ?? '');
     $status = (string) ($row['status'] ?? '');
-    $graded = (array_key_exists('points', $row) && $row['points'] !== null) || $reportstatus === 'final';
+    $graded = !empty($row['released']);
     $lines = [
         'submission' => get_string('submissionstatus_submitted', 'assign'),
         'submissionclass' => 'submissionstatussubmitted',
@@ -455,6 +502,351 @@ function streamvoice_submissions_open(\stdClass $instance): bool {
         return false;
     }
     return true;
+}
+
+/**
+ * Map a Stream error code to a language string when one exists.
+ *
+ * @param array{ok: bool, message: string, code: string, data: array<string, mixed>} $result
+ * @return string
+ */
+/**
+ * A Word document cannot be painted by the browser. Turn a docx package into the text a marker reads.
+ *
+ * Only text nodes are copied, and they are escaped, so the document cannot run as the teacher.
+ *
+ * @param string $bytes
+ * @return string|null HTML fragment, or null when the bytes are not a docx package
+ */
+function streamvoice_report_docx_html(string $bytes): ?string {
+    if (strncmp($bytes, 'PK', 2) !== 0 || !class_exists('ZipArchive') || strlen($bytes) > 20000000) {
+        return null;
+    }
+    $path = tempnam(sys_get_temp_dir(), 'svdocx');
+    if ($path === false) {
+        return null;
+    }
+    file_put_contents($path, $bytes);
+    $zip = new ZipArchive();
+    if ($zip->open($path) !== true) {
+        @unlink($path);
+        return null;
+    }
+    $document = $zip->getFromName('word/document.xml');
+    $numbering = $zip->getFromName('word/numbering.xml');
+    $styles = $zip->getFromName('word/styles.xml');
+    $zip->close();
+    @unlink($path);
+    if (!is_string($document) || $document === '' || strlen($document) > 8000000) {
+        return null;
+    }
+
+    $dom = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $dom->loadXML($document, LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded || !$dom->documentElement) {
+        return null;
+    }
+
+    $ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    $headings = streamvoice_report_docx_headings(is_string($styles) ? $styles : '');
+    $formats = streamvoice_report_docx_numbering(is_string($numbering) ? $numbering : '');
+    $counters = [];
+    $html = streamvoice_report_docx_children($dom->documentElement, $ns, $headings, $formats, $counters);
+    $html = trim($html);
+    return $html === '' ? null : $html;
+}
+
+/**
+ * Paragraph styles whose name is a heading.
+ *
+ * @param string $xml
+ * @return array<string, int>
+ */
+function streamvoice_report_docx_headings(string $xml): array {
+    $headings = [];
+    if ($xml === '') {
+        return $headings;
+    }
+    $dom = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $dom->loadXML($xml, LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded) {
+        return $headings;
+    }
+    $ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    foreach ($dom->getElementsByTagNameNS($ns, 'style') as $style) {
+        if ($style->getAttributeNS($ns, 'type') !== 'paragraph') {
+            continue;
+        }
+        $id = $style->getAttributeNS($ns, 'styleId');
+        if ($id === '') {
+            continue;
+        }
+        $level = 0;
+        foreach ($style->childNodes as $child) {
+            if (!$child instanceof DOMElement || $child->namespaceURI !== $ns) {
+                continue;
+            }
+            if ($child->localName === 'name' && preg_match('/heading\s*([1-6])/i', $child->getAttributeNS($ns, 'val'), $match)) {
+                $level = (int) $match[1];
+            }
+            if ($child->localName === 'pPr') {
+                foreach ($child->childNodes as $prop) {
+                    if ($prop instanceof DOMElement && $prop->localName === 'outlineLvl' && $prop->namespaceURI === $ns) {
+                        $level = min(6, (int) $prop->getAttributeNS($ns, 'val') + 1);
+                    }
+                }
+            }
+        }
+        if ($level > 0) {
+            $headings[$id] = $level;
+        }
+    }
+    return $headings;
+}
+
+/**
+ * List format for each numbering id and level.
+ *
+ * @param string $xml
+ * @return array<string, array<int, string>>
+ */
+function streamvoice_report_docx_numbering(string $xml): array {
+    $formats = [];
+    if ($xml === '') {
+        return $formats;
+    }
+    $dom = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $dom->loadXML($xml, LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded) {
+        return $formats;
+    }
+    $ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    $abstract = [];
+    foreach ($dom->getElementsByTagNameNS($ns, 'abstractNum') as $node) {
+        $id = $node->getAttributeNS($ns, 'abstractNumId');
+        foreach ($node->getElementsByTagNameNS($ns, 'lvl') as $level) {
+            if ($level->parentNode !== $node) {
+                continue;
+            }
+            $fmt = 'bullet';
+            foreach ($level->childNodes as $child) {
+                if ($child instanceof DOMElement && $child->localName === 'numFmt' && $child->namespaceURI === $ns) {
+                    $fmt = $child->getAttributeNS($ns, 'val') ?: 'bullet';
+                }
+            }
+            $abstract[$id][(int) $level->getAttributeNS($ns, 'ilvl')] = $fmt;
+        }
+    }
+    foreach ($dom->getElementsByTagNameNS($ns, 'num') as $node) {
+        $id = $node->getAttributeNS($ns, 'numId');
+        $link = '';
+        foreach ($node->childNodes as $child) {
+            if ($child instanceof DOMElement && $child->localName === 'abstractNumId' && $child->namespaceURI === $ns) {
+                $link = $child->getAttributeNS($ns, 'val');
+            }
+        }
+        if ($id !== '' && isset($abstract[$link])) {
+            $formats[$id] = $abstract[$link];
+        }
+    }
+    return $formats;
+}
+
+/**
+ * @param DOMElement $node
+ * @param array<string, int> $headings
+ * @param array<string, array<int, string>> $formats
+ * @param array<string, array<int, int>> $counters
+ */
+function streamvoice_report_docx_children(
+    DOMElement $node,
+    string $ns,
+    array $headings,
+    array $formats,
+    array &$counters
+): string {
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        if (!$child instanceof DOMElement || $child->namespaceURI !== $ns) {
+            continue;
+        }
+        if ($child->localName === 'p') {
+            $html .= streamvoice_report_docx_paragraph($child, $ns, $headings, $formats, $counters);
+        } else if ($child->localName === 'tbl') {
+            $html .= streamvoice_report_docx_table($child, $ns, $headings, $formats, $counters);
+        } else if ($child->localName !== 'r' && $child->localName !== 'del') {
+            $html .= streamvoice_report_docx_children($child, $ns, $headings, $formats, $counters);
+        }
+    }
+    return $html;
+}
+
+/**
+ * @param array<string, int> $headings
+ * @param array<string, array<int, string>> $formats
+ * @param array<string, array<int, int>> $counters
+ */
+function streamvoice_report_docx_paragraph(
+    DOMElement $paragraph,
+    string $ns,
+    array $headings,
+    array $formats,
+    array &$counters
+): string {
+    $style = '';
+    $level = 0;
+    $bidi = false;
+    $numid = '';
+    $ilvl = 0;
+    foreach ($paragraph->childNodes as $child) {
+        if (!$child instanceof DOMElement || $child->namespaceURI !== $ns || $child->localName !== 'pPr') {
+            continue;
+        }
+        foreach ($child->childNodes as $prop) {
+            if (!$prop instanceof DOMElement || $prop->namespaceURI !== $ns) {
+                continue;
+            }
+            if ($prop->localName === 'pStyle') {
+                $style = $prop->getAttributeNS($ns, 'val');
+            } else if ($prop->localName === 'bidi') {
+                $bidi = $prop->getAttributeNS($ns, 'val') !== '0';
+            } else if ($prop->localName === 'outlineLvl') {
+                $level = min(6, (int) $prop->getAttributeNS($ns, 'val') + 1);
+            } else if ($prop->localName === 'numPr') {
+                foreach ($prop->childNodes as $num) {
+                    if (!$num instanceof DOMElement || $num->namespaceURI !== $ns) {
+                        continue;
+                    }
+                    if ($num->localName === 'numId') {
+                        $numid = $num->getAttributeNS($ns, 'val');
+                    } else if ($num->localName === 'ilvl') {
+                        $ilvl = (int) $num->getAttributeNS($ns, 'val');
+                    }
+                }
+            }
+        }
+    }
+    if ($level === 0 && isset($headings[$style])) {
+        $level = $headings[$style];
+    }
+    $text = streamvoice_report_docx_runs($paragraph, $ns);
+    if (trim(strip_tags($text)) === '' && $numid === '') {
+        return '<p>&#160;</p>';
+    }
+    $marker = '';
+    if ($numid !== '' && $numid !== '0') {
+        $counters[$numid][$ilvl] = ($counters[$numid][$ilvl] ?? 0) + 1;
+        foreach (array_keys($counters[$numid]) as $deeper) {
+            if ($deeper > $ilvl) {
+                unset($counters[$numid][$deeper]);
+            }
+        }
+        $fmt = $formats[$numid][$ilvl] ?? 'bullet';
+        $marker = ($fmt === 'decimal' || $fmt === 'decimalZero')
+            ? $counters[$numid][$ilvl] . '. '
+            : '• ';
+    }
+    $tag = $level > 0 ? 'h' . min(4, $level) : 'p';
+    $dir = $bidi ? 'rtl' : 'auto';
+    $indent = $ilvl > 0 ? ' style="padding-inline-start:' . (1.25 * $ilvl) . 'rem"' : '';
+    return '<' . $tag . ' dir="' . $dir . '"' . $indent . '>' . s($marker) . $text . '</' . $tag . '>';
+}
+
+/**
+ * @param array<string, int> $headings
+ * @param array<string, array<int, string>> $formats
+ * @param array<string, array<int, int>> $counters
+ */
+function streamvoice_report_docx_table(
+    DOMElement $table,
+    string $ns,
+    array $headings,
+    array $formats,
+    array &$counters
+): string {
+    $html = '<table>';
+    foreach ($table->childNodes as $row) {
+        if (!$row instanceof DOMElement || $row->namespaceURI !== $ns || $row->localName !== 'tr') {
+            continue;
+        }
+        $html .= '<tr>';
+        foreach ($row->childNodes as $cell) {
+            if (!$cell instanceof DOMElement || $cell->namespaceURI !== $ns || $cell->localName !== 'tc') {
+                continue;
+            }
+            $html .= '<td>' . streamvoice_report_docx_children($cell, $ns, $headings, $formats, $counters) . '</td>';
+        }
+        $html .= '</tr>';
+    }
+    return $html . '</table>';
+}
+
+/**
+ * Visible text of a paragraph. Deleted revisions are left out.
+ */
+function streamvoice_report_docx_runs(DOMElement $node, string $ns): string {
+    $html = '';
+    foreach ($node->childNodes as $child) {
+        if (!$child instanceof DOMElement || $child->namespaceURI !== $ns || $child->localName === 'pPr') {
+            continue;
+        }
+        if ($child->localName === 'del') {
+            continue;
+        }
+        if ($child->localName === 't') {
+            $html .= s($child->textContent);
+            continue;
+        }
+        if ($child->localName === 'tab') {
+            $html .= '&#160;&#160;&#160;&#160;';
+            continue;
+        }
+        if ($child->localName === 'br' || $child->localName === 'cr') {
+            $html .= '<br>';
+            continue;
+        }
+        $inner = streamvoice_report_docx_runs($child, $ns);
+        if ($child->localName !== 'r' || $inner === '') {
+            $html .= $inner;
+            continue;
+        }
+        $bold = false;
+        $italic = false;
+        foreach ($child->childNodes as $prop) {
+            if (!$prop instanceof DOMElement || $prop->namespaceURI !== $ns || $prop->localName !== 'rPr') {
+                continue;
+            }
+            foreach ($prop->childNodes as $flag) {
+                if (!$flag instanceof DOMElement || $flag->namespaceURI !== $ns) {
+                    continue;
+                }
+                $off = $flag->getAttributeNS($ns, 'val') === '0' || $flag->getAttributeNS($ns, 'val') === 'false';
+                if (($flag->localName === 'b' || $flag->localName === 'bCs') && !$off) {
+                    $bold = true;
+                }
+                if (($flag->localName === 'i' || $flag->localName === 'iCs') && !$off) {
+                    $italic = true;
+                }
+            }
+        }
+        if ($bold) {
+            $inner = '<strong>' . $inner . '</strong>';
+        }
+        if ($italic) {
+            $inner = '<em>' . $inner . '</em>';
+        }
+        $html .= $inner;
+    }
+    return $html;
 }
 
 /**

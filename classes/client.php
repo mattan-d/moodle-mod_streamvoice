@@ -152,6 +152,32 @@ class client {
     }
 
     /**
+     * Publish the teacher's final grade and feedback. The student sees only this.
+     *
+     * @param int $cmid
+     * @param array{moodleuserid: int, grade: float, feedback?: string} $grade
+     * @return array{ok: bool, message: string, code: string, data: array<string, mixed>}
+     */
+    public function release_grade(int $cmid, array $grade): array {
+        $payload = [
+            'action' => 'release_grade',
+            'host' => self::host(),
+            'cmid' => $cmid,
+            'moodleuserid' => (int) ($grade['moodleuserid'] ?? 0),
+            'grade' => $grade['grade'] ?? '',
+        ];
+        if (array_key_exists('feedback', $grade)) {
+            $payload['feedback'] = (string) $grade['feedback'];
+        }
+        foreach (['workgrade', 'defensegrade'] as $part) {
+            if (array_key_exists($part, $grade)) {
+                $payload[$part] = $grade[$part];
+            }
+        }
+        return $this->post_json($payload);
+    }
+
+    /**
      * The locked file a student submitted. Returned as bytes for the marker to download.
      *
      * @param int $cmid

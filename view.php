@@ -81,6 +81,15 @@ $context = context_module::instance($cm->id);
 require_capability('mod/streamvoice:view', $context);
 
 $action = optional_param('action', '', PARAM_ALPHA);
+if ($action === 'grader') {
+    require_capability('mod/streamvoice:grade', $context);
+    $graderurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'action' => 'grader']);
+    $graderuser = optional_param('userid', 0, PARAM_INT);
+    if ($graderuser > 0) {
+        $graderurl->param('userid', $graderuser);
+    }
+    redirect($graderurl);
+}
 $pageurl = new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id]);
 if ($action === 'defense') {
     $PAGE->set_url(new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id, 'action' => 'defense']));
@@ -213,11 +222,15 @@ if ($action === 'defense' && $submission && $client->is_configured()) {
 }
 
 if ($cangrade) {
-    $gradeurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id]);
+    $gradeurl = new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id, 'action' => 'grader']);
+    $submissionsurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id]);
     echo html_writer::start_div('container-fluid tertiary-navigation');
     echo html_writer::start_div('row');
     echo html_writer::start_div('navitem');
     echo html_writer::link($gradeurl, get_string('gradeverb'), ['class' => 'btn btn-primary']);
+    echo html_writer::end_div();
+    echo html_writer::start_div('navitem');
+    echo html_writer::link($submissionsurl, get_string('viewgrading', 'assign'), ['class' => 'btn btn-secondary']);
     echo html_writer::end_div();
     echo html_writer::end_div();
     echo html_writer::end_div();
@@ -332,7 +345,7 @@ function streamvoice_view_grading_summary($cm, $instance, moodle_url $pageurl, $
 
     $needgrading = 0;
     foreach ($submissions as $row) {
-        if (!array_key_exists('points', $row) || $row['points'] === null) {
+        if (empty($row['released'])) {
             $needgrading++;
         }
     }
@@ -435,12 +448,22 @@ function streamvoice_view_submission_status($instance, $submission): string {
         );
     }
 
-    $graded = $submission && array_key_exists('points', $submission) && $submission['points'] !== null;
+    $graded = $submission && !empty($submission['released']);
     $table->data[] = streamvoice_view_row(
         get_string('gradingstatus', 'assign'),
         get_string($graded ? 'graded' : 'notgraded', 'assign'),
         $graded ? 'submissiongraded' : 'submissionnotgraded'
     );
+    if ($graded) {
+        $table->data[] = streamvoice_view_row(
+            get_string('finalgrade', 'grades'),
+            s((string) ($submission['teachergrade'] ?? ''))
+        );
+        $feedback = trim((string) ($submission['teacherfeedback'] ?? ''));
+        if ($feedback !== '') {
+            $table->data[] = streamvoice_view_row(get_string('feedback', 'assign'), s($feedback));
+        }
+    }
 
     $due = (int) ($instance->timeclose ?? 0);
     if ($due > 0) {

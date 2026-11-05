@@ -1,59 +1,152 @@
-.path-mod-streamvoice div.submissionstatustable,
-.path-mod-streamvoice div.gradingsummary {
-    margin-bottom: 1.5em;
+.path-mod-streamvoice.pagelayout-embedded.sv-grader-page {
+    overflow: hidden;
 }
 
-.path-mod-streamvoice div.submissionsummarytable .generaltable,
-.path-mod-streamvoice div.gradingsummary .generaltable {
+.path-mod-streamvoice .sv-grader {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+}
+
+.path-mod-streamvoice .sv-grader-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-height: 4.5rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid #dee2e6;
+    background: #fff;
+}
+
+.path-mod-streamvoice .sv-grader-title {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.path-mod-streamvoice .sv-grader-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 1 auto;
+}
+
+.path-mod-streamvoice .sv-grader-name {
+    font-weight: 700;
+}
+
+.path-mod-streamvoice .sv-grader-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-inline-start: auto;
+}
+
+.path-mod-streamvoice .sv-grader-chooser {
+    margin: 0;
+}
+
+.path-mod-streamvoice .sv-grader-chooser select {
+    max-width: 16rem;
+}
+
+.path-mod-streamvoice .sv-grader-body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    direction: ltr;
+}
+
+.path-mod-streamvoice .sv-grader-review {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #525659;
+}
+
+.path-mod-streamvoice .sv-grader-filebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0.75rem;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.path-mod-streamvoice .sv-grader-filename {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.path-mod-streamvoice .sv-grader-review iframe {
+    flex: 1 1 auto;
+    width: 100%;
+    border: 0;
+    background: #fff;
+}
+
+.path-mod-streamvoice .sv-grader-empty {
+    margin: auto;
+    padding: 2rem;
+    color: #fff;
+    text-align: center;
+}
+
+.path-mod-streamvoice .sv-grader-grade {
+    flex: 0 0 28rem;
+    max-width: 40%;
+    overflow: auto;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-left: 1px solid #dee2e6;
+}
+
+.path-mod-streamvoice .sv-final {
+    font-weight: 700;
+}
+
+.path-mod-streamvoice .sv-grader-grade .sv-label {
+    font-weight: 700;
+    margin: 0 0 0.35rem;
+}
+
+.path-mod-streamvoice .sv-grader-form textarea {
     width: 100%;
 }
 
-.path-mod-streamvoice .gradingsummarytable,
-.path-mod-streamvoice .submissionsummarytable {
-    margin-top: 1em;
-}
-
-.path-mod-streamvoice .submissionsummarytable .c0,
-.path-mod-streamvoice .gradingsummarytable .c0 {
-    width: 15em;
-}
-
-.path-mod-streamvoice td.submissionstatussubmitted {
-    color: black;
-    background-color: #cfefcf;
-}
-
-.path-mod-streamvoice td.submissiongraded {
-    color: black;
-    background-color: #cfefcf;
-}
-
-.path-mod-streamvoice td.submissionnotgraded,
-.path-mod-streamvoice .submissionnotgraded {
-    color: black;
-}
-
-.path-mod-streamvoice div.submissionstatus {
-    color: black;
-    background-color: #efefef;
-}
-
-.path-mod-streamvoice div.submissionstatussubmitted {
-    color: black;
-    background-color: #cfefcf;
-}
-
-.path-mod-streamvoice div.submissiongraded {
-    color: black;
-    background-color: #cfefcf;
-}
-
-.path-mod-streamvoice table.gradingtable {
+.path-mod-streamvoice .sv-grader-grade .streamvoice-answer iframe.sv-player,
+.path-mod-streamvoice .sv-grader-grade .streamvoice-answer video {
     width: 100%;
+    max-width: 100%;
 }
 
-.path-mod-streamvoice .gradingtable .submissioninfo div {
-    display: inline-block;
-    padding: 0 0.4em;
-    margin-inline-end: 0.35em;
+@media (max-width: 768px) {
+    .path-mod-streamvoice.pagelayout-embedded.sv-grader-page {
+        overflow: auto;
+    }
+
+    .path-mod-streamvoice .sv-grader {
+        position: static;
+        min-height: 100vh;
+    }
+
+    .path-mod-streamvoice .sv-grader-nav,
+    .path-mod-streamvoice .sv-grader-body {
+        display: block;
+        direction: inherit;
+    }
+
+    .path-mod-streamvoice .sv-grader-review {
+        height: 60vh;
+    }
+
+    .path-mod-streamvoice .sv-grader-grade {
+        max-width: none;
+    }
 }

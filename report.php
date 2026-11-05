@@ -105,18 +105,26 @@ foreach ($submissions as $row) {
 }
 
 if ($download && $userid) {
-    streamvoice_report_download($client, $cm, $byuser[$userid] ?? null);
+    streamvoice_report_download($client, $cm, $byuser[$userid] ?? null, (bool) optional_param('inline', 0, PARAM_BOOL));
 }
 
 $gradesaved = streamvoice_report_save_grades($instance, $context);
 if ($gradesaved === true) {
     $back = new moodle_url($pageurl);
+    if (optional_param('action', '', PARAM_ALPHA) === 'grader') {
+        $back->param('action', 'grader');
+    }
     if ($userid) {
         $back->param('userid', $userid);
     }
     redirect($back, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
 } else if (is_string($gradesaved)) {
     $notices[] = [$gradesaved, 'error'];
+}
+
+if (optional_param('action', '', PARAM_ALPHA) === 'grader') {
+    streamvoice_report_grader($client, $cm, $course, $instance, $users, $byuser, $userid, $notices);
+    exit;
 }
 
 if ($userid) {
@@ -181,19 +189,7 @@ streamvoice_report_page_start($notices);
 echo streamvoice_report_actionbar($cm, $course, $statusfilter, $search, $sifirst, $silast);
 echo streamvoice_report_initials($pageurl, $sifirst, $silast);
 echo streamvoice_report_paging($usercount, $page, $perpage, $pageurl);
-echo html_writer::start_tag('form', ['method' => 'post', 'action' => $pageurl->out(false)]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-echo html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
 echo streamvoice_report_table($cm, $course, $instance, $pageusers, $byuser, $gradinginfo, $pageurl);
-echo html_writer::div(
-    html_writer::empty_tag('input', [
-        'type' => 'submit',
-        'value' => get_string('savechanges'),
-        'class' => 'btn btn-primary',
-    ]),
-    'mt-3'
-);
-echo html_writer::end_tag('form');
 echo streamvoice_report_paging($usercount, $page, $perpage, $pageurl);
 echo $OUTPUT->footer();
 
@@ -313,13 +309,33 @@ function streamvoice_report_paging(int $total, int $page, int $perpage, moodle_u
 }
 
 /**
+ * Show generated preview HTML inside the grading frame. The response is sandboxed.
+ *
+ * @param string $inner
+ * @param string $css
+ */
+function streamvoice_report_send_html(string $inner, string $css): void {
+    $html = '<!doctype html><html><head><meta charset="utf-8"><style>' . $css
+        . '</style></head><body dir="auto">' . $inner . '</body></html>';
+    \core\session\manager::write_close();
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Length: ' . strlen($html));
+    header('Content-Disposition: inline');
+    header('Cache-Control: private, no-store');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Security-Policy: sandbox');
+    echo $html;
+    exit;
+}
+
+/**
  * Download the locked file for one submission.
  *
  * @param \mod_streamvoice\client $client
  * @param \stdClass $cm
  * @param array<string, mixed>|null $row
  */
-function streamvoice_report_download($client, \stdClass $cm, ?array $row): void {
+function streamvoice_report_download($client, \stdClass $cm, ?array $row, bool $inline = false): void {
     if (!$row || empty($row['id']) || trim((string) ($row['artifactname'] ?? '')) === '') {
         throw new moodle_exception('filenotfound', 'error');
     }
@@ -331,10 +347,38 @@ function streamvoice_report_download($client, \stdClass $cm, ?array $row): void 
     if ($name === '' || $name === '.') {
         $name = 'submission';
     }
+    $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $mimetype = mimeinfo('type', $name);
+    if (in_array($extension, ['html', 'htm', 'svg', 'xml'], true)) {
+        $mimetype = 'text/plain';
+    }
+    if ($inline && in_array($extension, ['doc', 'docx'], true)) {
+        $preview = streamvoice_report_docx_html($file['body']);
+        if ($preview === null) {
+            $preview = '<p>' . s(get_string('previewunavailable', 'streamvoice')) . '</p>';
+        }
+        streamvoice_report_send_html(
+            $preview,
+            'body{margin:0;padding:1.5rem 1.75rem;background:#fff;color:#1d2125;font:1rem/1.65 sans-serif}'
+            . 'p{margin:0 0 .7rem}h1,h2,h3,h4{margin:1.15rem 0 .4rem;line-height:1.35}'
+            . 'table{border-collapse:collapse;width:100%;margin:0 0 1rem}'
+            . 'td{border:1px solid #dee2e6;padding:.4rem .55rem;vertical-align:top}'
+        );
+    }
+    if ($inline && strpos($mimetype, 'text/') === 0) {
+        streamvoice_report_send_html(
+            s($file['body']),
+            'body{margin:0;padding:1.25rem 1.5rem;background:#fff;color:#1d2125;font:1rem/1.7 sans-serif;white-space:pre-wrap;word-break:break-word}'
+        );
+    }
+    if (strpos($mimetype, 'text/') === 0) {
+        $mimetype .= '; charset=utf-8';
+    }
+    $disposition = $inline ? 'inline' : 'attachment';
     \core\session\manager::write_close();
-    header('Content-Type: ' . mimeinfo('type', $name));
+    header('Content-Type: ' . $mimetype);
     header('Content-Length: ' . strlen($file['body']));
-    header('Content-Disposition: attachment; filename="' . rawurlencode($name) . '"; filename*=UTF-8\'\'' . rawurlencode($name));
+    header('Content-Disposition: ' . $disposition . '; filename="' . rawurlencode($name) . '"; filename*=UTF-8\'\'' . rawurlencode($name));
     header('Cache-Control: private, no-store');
     header('X-Content-Type-Options: nosniff');
     echo $file['body'];
@@ -356,35 +400,56 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
     if ($grademax <= 0) {
         return null;
     }
-    $posted = optional_param_array('grade', [], PARAM_RAW);
-    $original = optional_param_array('gradeorig', [], PARAM_RAW);
-    if (!$posted) {
+    $works = optional_param_array('workgrade', [], PARAM_RAW);
+    $defenses = optional_param_array('defensegrade', [], PARAM_RAW);
+    $feedbacks = optional_param_array('feedback', [], PARAM_RAW);
+    if (!$works && !$defenses) {
         return null;
     }
+    $userids = array_unique(array_merge(array_map('intval', array_keys($works)), array_map('intval', array_keys($defenses))));
     $updates = [];
-    foreach ($posted as $userid => $raw) {
-        $userid = (int) $userid;
+    foreach ($userids as $userid) {
         if ($userid <= 0 || !is_enrolled($context, $userid, '', true)) {
             continue;
         }
-        $raw = trim((string) $raw);
-        $was = trim((string) ($original[$userid] ?? ''));
-        if ($raw === '' || $raw === $was) {
-            continue;
+        $workraw = trim((string) ($works[$userid] ?? ''));
+        $defenseraw = trim((string) ($defenses[$userid] ?? ''));
+        if ($workraw === '' || $defenseraw === '') {
+            return get_string('bothgradesrequired', 'streamvoice');
         }
-        $value = unformat_float($raw, true);
-        if ($value === false || $value < 0 || $value > $grademax) {
+        $work = unformat_float($workraw, true);
+        $defense = unformat_float($defenseraw, true);
+        if ($work === false || $defense === false || $work < 0 || $defense < 0 || $work > $grademax || $defense > $grademax) {
             return get_string('gradeoutofrange', 'streamvoice', format_float($grademax, 2));
         }
-        $previous = unformat_float($was, true);
-        if ($previous !== false && !grade_floats_different((float) $value, (float) $previous)) {
-            continue;
-        }
-        $updates[$userid] = (float) $value;
+        $updates[$userid] = [
+            'work' => (float) $work,
+            'defense' => (float) $defense,
+            'grade' => streamvoice_compose_grade($instance, (float) $work, (float) $defense),
+            'feedback' => array_key_exists($userid, $feedbacks) ? trim((string) $feedbacks[$userid]) : null,
+        ];
     }
-    foreach ($updates as $userid => $value) {
-        if (!streamvoice_set_teacher_grade($instance, $userid, $value)) {
+    $cmid = optional_param('id', 0, PARAM_INT);
+    $client = new \mod_streamvoice\client();
+    foreach ($updates as $userid => $update) {
+        if (!streamvoice_set_teacher_grade($instance, $userid, $update['grade'], $update['feedback'])) {
             return get_string('error');
+        }
+        if ($client->is_configured() && $cmid > 0) {
+            $payload = [
+                'moodleuserid' => $userid,
+                'grade' => $update['grade'],
+                'workgrade' => $update['work'],
+                'defensegrade' => $update['defense'],
+            ];
+            if ($update['feedback'] !== null) {
+                $payload['feedback'] = $update['feedback'];
+            }
+            $released = $client->release_grade($cmid, $payload);
+            if (empty($released['ok'])) {
+                $message = trim((string) ($released['message'] ?? ''));
+                return $message !== '' ? $message : get_string('error');
+            }
         }
     }
     return $updates ? true : null;
@@ -398,6 +463,139 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
  * @param \stdClass|null $gradeobj
  * @return string
  */
+/**
+ * Teacher grading form. The AI defense score stays on this page. The saved grade is
+ * the work grade and the defense grade combined by the activity weights.
+ *
+ * @param \stdClass $user
+ * @param array<string, mixed>|null $row
+ * @param array<string, mixed> $report
+ * @param \stdClass $instance
+ * @param \moodle_url $action
+ * @param \stdClass|null $gradeobj
+ * @return string
+ */
+function streamvoice_report_parts_form(
+    \stdClass $user,
+    ?array $row,
+    array $report,
+    \stdClass $instance,
+    moodle_url $action,
+    $gradeobj
+): string {
+    $grademax = (int) ($instance->grade ?? 0);
+    if ($grademax <= 0) {
+        $grademax = 100;
+    }
+    $fileweight = (int) ($instance->weightfile ?? 40);
+    $oralweight = (int) ($instance->weightoral ?? 60);
+    $oral = $report['oral'] ?? ($row['oral'] ?? null);
+    $ai = streamvoice_scale_score($oral, $grademax);
+    $consistency = $report['consistency'] ?? ($row['consistency'] ?? null);
+    $savedwork = (isset($row['workgrade']) && $row['workgrade'] !== '' && $row['workgrade'] !== null)
+        ? (float) $row['workgrade'] : null;
+    $saveddefense = (isset($row['defensegrade']) && $row['defensegrade'] !== '' && $row['defensegrade'] !== null)
+        ? (float) $row['defensegrade'] : null;
+    $defensevalue = $saveddefense !== null ? $saveddefense : $ai;
+
+    $html = '';
+    $html .= html_writer::div(get_string('aidefense', 'streamvoice'), 'sv-label');
+    $html .= html_writer::div(
+        $ai === null ? '-' : format_float($ai, 2) . ' / ' . format_float($grademax, 2),
+        'h3 mb-1',
+        ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
+    );
+    $html .= html_writer::div(get_string('aidiscretion', 'streamvoice'), 'small text-muted mb-2');
+    if ($consistency !== null && $consistency !== '') {
+        $html .= html_writer::div(
+            get_string('consistency', 'streamvoice') . ': ' . format_float((float) $consistency, 1),
+            'small mb-1',
+            ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
+        );
+    }
+    if (!empty($row['summary'])) {
+        $html .= html_writer::div(format_text((string) $row['summary'], FORMAT_PLAIN), 'small text-muted mb-3');
+    }
+
+    $finaltext = '';
+    if ($savedwork !== null && $defensevalue !== null) {
+        $final = streamvoice_compose_grade($instance, $savedwork, (float) $defensevalue);
+        $finaltext = get_string('gradeparts', 'streamvoice', (object) [
+            'final' => format_float($final, 2),
+            'work' => format_float($savedwork, 2),
+            'fileweight' => $fileweight,
+            'defense' => format_float((float) $defensevalue, 2),
+            'oralweight' => $oralweight,
+        ]);
+    } else if ($gradeobj && $gradeobj->grade !== null && $gradeobj->grade !== '') {
+        $finaltext = format_float((float) $gradeobj->grade, 2);
+    }
+
+    $field = function (string $label, string $name, ?float $value) use ($user): string {
+        $out = html_writer::div($label, 'sv-label mt-3');
+        $out .= html_writer::empty_tag('input', [
+            'type' => 'text',
+            'name' => $name . '[' . (int) $user->id . ']',
+            'value' => $value === null ? '' : format_float($value, 2),
+            'class' => 'form-control ' . ($name === 'workgrade' ? 'sv-work' : 'sv-defense'),
+            'dir' => 'ltr',
+            'inputmode' => 'decimal',
+            'aria-label' => $label,
+            'style' => 'width:8rem;unicode-bidi:isolate',
+        ]);
+        return $out;
+    };
+
+    $html .= html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => $action->out(false),
+        'class' => 'sv-grade-parts',
+        'data-file-weight' => $fileweight,
+        'data-oral-weight' => $oralweight,
+    ]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
+    $html .= $field(get_string('workgrade', 'streamvoice'), 'workgrade', $savedwork);
+    $html .= $field(get_string('defensegrade', 'streamvoice'), 'defensegrade', $defensevalue);
+    $html .= html_writer::div(get_string('finalgrade', 'grades'), 'sv-label mt-3');
+    $html .= html_writer::div($finaltext, 'sv-final h4', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']);
+    $html .= html_writer::div(get_string('feedback', 'assign'), 'sv-label mt-3');
+    $html .= html_writer::tag('textarea', s((string) ($row['teacherfeedback'] ?? '')), [
+        'name' => 'feedback[' . (int) $user->id . ']',
+        'rows' => 4,
+        'class' => 'form-control',
+    ]);
+    $html .= html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'value' => get_string('savechanges'),
+        'class' => 'btn btn-primary mt-3',
+    ]);
+    $html .= html_writer::end_tag('form');
+    $html .= html_writer::script(
+        "(function () {\n"
+        . "    document.querySelectorAll('.sv-grade-parts').forEach(function (form) {\n"
+        . "        var fileWeight = Number(form.getAttribute('data-file-weight')) || 0;\n"
+        . "        var oralWeight = Number(form.getAttribute('data-oral-weight')) || 0;\n"
+        . "        var out = form.querySelector('.sv-final');\n"
+        . "        var paint = function () {\n"
+        . "            var work = parseFloat((form.querySelector('.sv-work').value || '').replace(',', '.'));\n"
+        . "            var defense = parseFloat((form.querySelector('.sv-defense').value || '').replace(',', '.'));\n"
+        . "            if (!isFinite(work) || !isFinite(defense)) {\n"
+        . "                return;\n"
+        . "            }\n"
+        . "            var finalGrade = Math.round((work * fileWeight + defense * oralWeight)) / 100;\n"
+        . "            out.textContent = finalGrade.toFixed(2) + ' = '\n"
+        . "                + work.toFixed(2) + ' × ' + fileWeight + '% + '\n"
+        . "                + defense.toFixed(2) + ' × ' + oralWeight + '%';\n"
+        . "        };\n"
+        . "        form.querySelector('.sv-work').addEventListener('input', paint);\n"
+        . "        form.querySelector('.sv-defense').addEventListener('input', paint);\n"
+        . "    });\n"
+        . "})();"
+    );
+    return $html;
+}
+
 function streamvoice_report_grade_input(\stdClass $user, ?array $row, $gradeobj): string {
     $book = null;
     if ($gradeobj && isset($gradeobj->grade) && $gradeobj->grade !== null && $gradeobj->grade !== '') {
@@ -546,7 +744,7 @@ function streamvoice_report_table(
     $table->define_headers([
         get_string('fullnameuser'),
         get_string('status', 'assign'),
-        get_string('gradenoun'),
+        get_string('aidefense', 'streamvoice'),
         get_string('pluginname', 'assignsubmission_file'),
         get_string('lastmodifiedsubmission', 'assign'),
         get_string('finalgrade', 'grades'),
@@ -565,7 +763,11 @@ function streamvoice_report_table(
 
     foreach ($users as $user) {
         $row = $byuser[(int) $user->id] ?? null;
-        $detailurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]);
+        $detailurl = new moodle_url('/mod/streamvoice/report.php', [
+            'id' => $cm->id,
+            'action' => 'grader',
+            'userid' => $user->id,
+        ]);
         $picture = $OUTPUT->user_picture($user, ['courseid' => $course->id, 'size' => 35]);
         $name = html_writer::link($detailurl, fullname($user));
         $fullname = html_writer::div($picture . $name, 'd-flex align-items-center');
@@ -579,15 +781,16 @@ function streamvoice_report_table(
             $status .= html_writer::div($lines['grading'], $lines['gradingclass'] . ' mt-1');
         }
 
-        if ($row && array_key_exists('points', $row) && $row['points'] !== null) {
-            $grade = html_writer::span(
-                format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2),
+        $ai = ($row && isset($row['oral']) && $row['oral'] !== null && $row['oral'] !== '')
+            ? streamvoice_scale_score($row['oral'], $grademax)
+            : null;
+        $grade = $ai === null
+            ? '-'
+            : html_writer::span(
+                format_float($ai, 2) . ' / ' . format_float($grademax, 2),
                 '',
                 ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
             );
-        } else {
-            $grade = '-';
-        }
 
         $artifact = trim((string) ($row['artifactname'] ?? ''));
         if ($row && $artifact !== '') {
@@ -605,8 +808,8 @@ function streamvoice_report_table(
 
         $itemgrades = $gradinginfo->items[0]->grades ?? null;
         $gradeobj = (is_array($itemgrades) && isset($itemgrades[$user->id])) ? $itemgrades[$user->id] : null;
-        $final = $grademax > 0
-            ? streamvoice_report_grade_input($user, $row, $gradeobj)
+        $final = ($gradeobj && $gradeobj->grade !== null && $gradeobj->grade !== '')
+            ? html_writer::span(format_float((float) $gradeobj->grade, 2), '', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate'])
             : '-';
 
         $table->add_data([$fullname, $status, $grade, $filename, $timemodified, $final]);
@@ -667,31 +870,6 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
         );
     }
     if ($row) {
-        $grademax = (int) ($instance->grade ?? 0);
-        if ($grademax <= 0) {
-            $grademax = 100;
-        }
-        $grade = (array_key_exists('points', $row) && $row['points'] !== null)
-            ? format_float((float) $row['points'], 2) . ' / ' . format_float($grademax, 2)
-            : '-';
-        $gradecell = html_writer::span($grade, '', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']);
-        $weights = is_array($report['weights'] ?? null) ? $report['weights'] : [];
-        if ($grade !== '-'
-                && isset($report['consistency'], $report['oral'], $weights['file'], $weights['oral'])
-                && $report['consistency'] !== null && $report['oral'] !== null) {
-            $gradecell .= html_writer::div(
-                get_string('gradebreakdown', 'streamvoice', (object) [
-                    'grade' => format_float((float) $row['points'], 2),
-                    'consistency' => format_float((float) $report['consistency'], 1),
-                    'fileweight' => (int) $weights['file'],
-                    'oral' => format_float((float) $report['oral'], 1),
-                    'oralweight' => (int) $weights['oral'],
-                ]),
-                'text-muted small',
-                ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
-            );
-        }
-        $summary->data[] = streamvoice_report_row(get_string('gradenoun'), $gradecell);
         $artifact = trim((string) ($row['artifactname'] ?? ''));
         if ($artifact !== '') {
             $fileurl = new moodle_url('/mod/streamvoice/report.php', [
@@ -707,49 +885,27 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
             get_string('pluginname', 'assignsubmission_file'),
             $filecell
         );
-        if ($grademax > 0) {
-            $gradeobj = null;
-            $info = grade_get_grades($course->id, 'mod', 'streamvoice', $instance->id, [$user->id]);
-            $itemgrades = $info->items[0]->grades ?? null;
-            if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
-                $gradeobj = $itemgrades[$user->id];
-            }
-            $editor = html_writer::start_tag('form', [
-                'method' => 'post',
-                'action' => (new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]))->out(false),
-                'class' => 'd-flex align-items-center',
-            ]);
-            $editor .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-            $editor .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
-            $editor .= streamvoice_report_grade_input($user, $row, $gradeobj);
-            $editor .= html_writer::empty_tag('input', [
-                'type' => 'submit',
-                'value' => get_string('savechanges'),
-                'class' => 'btn btn-secondary',
-                'style' => 'margin-inline-start:.5rem',
-            ]);
-            $editor .= html_writer::end_tag('form');
-            $summary->data[] = streamvoice_report_row(get_string('finalgrade', 'grades'), $editor);
-        }
-        if (isset($report['consistency']) && $report['consistency'] !== null) {
-            $summary->data[] = streamvoice_report_row(
-                get_string('consistency', 'streamvoice'),
-                format_float((float) $report['consistency'], 1)
-            );
-        }
-        if (isset($report['oral']) && $report['oral'] !== null) {
-            $summary->data[] = streamvoice_report_row(
-                get_string('oralscore', 'streamvoice'),
-                format_float((float) $report['oral'], 1)
-            );
-        }
-        if (!empty($row['summary'])) {
-            $summary->data[] = streamvoice_report_row(get_string('feedback', 'assign'), format_text((string) $row['summary'], FORMAT_PLAIN));
-        }
     }
     $html .= html_writer::table($summary);
     $html .= $OUTPUT->box_end();
     $html .= $OUTPUT->container_end();
+
+    if ($row) {
+        $gradeobj = null;
+        $info = grade_get_grades($course->id, 'mod', 'streamvoice', $instance->id, [$user->id]);
+        $itemgrades = $info->items[0]->grades ?? null;
+        if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
+            $gradeobj = $itemgrades[$user->id];
+        }
+        $html .= streamvoice_report_parts_form(
+            $user,
+            $row,
+            $report,
+            $instance,
+            new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]),
+            $gradeobj
+        );
+    }
 
     if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
         $html .= streamvoice_report_answers($answers);
@@ -770,6 +926,8 @@ function streamvoice_report_answers($answers): string {
         '.streamvoice-answer .sv-body{display:flex;flex-wrap:wrap;gap:1.25rem;align-items:stretch;margin-top:1rem}'
         . '.streamvoice-answer video,.streamvoice-answer iframe.sv-player{display:block;width:min(100%,32rem);max-width:32rem;aspect-ratio:16/9;flex:0 1 32rem;align-self:flex-start;margin:0;border:0;border-radius:.25rem;background:#1d2125}'
         . '.streamvoice-answer .sv-side{flex:1 1 16rem;min-width:min(100%,16rem);display:flex;flex-direction:column}'
+        . '.streamvoice-answer .sv-qhead{display:flex;align-items:baseline;gap:.75rem}'
+        . '.streamvoice-answer .sv-qhead h4{flex:1 1 auto;min-width:0;margin:0}'
         . '.streamvoice-answer .sv-label{font-weight:700;margin:0 0 .35rem}'
         . '.streamvoice-answer pre{flex:1;white-space:pre-wrap;min-height:8rem;max-height:22rem;overflow:auto;margin:0;background:#f8f9fa;border-radius:.25rem;padding:.75rem}'
     );
@@ -783,8 +941,8 @@ function streamvoice_report_answers($answers): string {
         if (!is_array($answer)) {
             continue;
         }
-        $head = html_writer::start_div('d-flex align-items-baseline flex-wrap');
-        $head .= html_writer::tag('h4', $number . '. ' . s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-0']);
+        $head = html_writer::start_div('sv-qhead');
+        $head .= html_writer::tag('h4', $number . '. ' . s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-0', 'dir' => 'auto']);
         if (isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
             $head .= html_writer::span(
                 get_string('answerscore', 'streamvoice') . ' ' . s((string) $answer['score']),
@@ -832,18 +990,30 @@ function streamvoice_report_answers($answers): string {
         }
         if (!empty($answer['transcript'])) {
             $side .= html_writer::div(get_string('transcript', 'streamvoice'), 'sv-label');
-            $side .= html_writer::tag('pre', s((string) $answer['transcript']));
+            $side .= html_writer::tag('pre', streamvoice_report_transcript((string) $answer['transcript']));
         }
         $body = html_writer::start_div('sv-body');
         $body .= $video;
         if ($side !== '') {
-            $body .= html_writer::div($side, 'sv-side');
+            $body .= html_writer::div($side, 'sv-side', ['dir' => 'auto']);
         }
         $body .= html_writer::end_div();
         $html .= $OUTPUT->box($head . $body, 'generalbox streamvoice-answer');
         $number++;
     }
     return $html;
+}
+
+/**
+ * Keep timestamp ranges readable inside a right-to-left answer.
+ *
+ * @param string $transcript
+ * @return string
+ */
+function streamvoice_report_transcript(string $transcript): string {
+    $safe = s($transcript);
+    $marked = preg_replace('/\[[0-9:.\s-]+\]/u', '<span dir="ltr">$0</span>', $safe);
+    return $marked === null ? $safe : $marked;
 }
 
 /**
@@ -858,4 +1028,197 @@ function streamvoice_report_row(string $label, string $value): html_table_row {
     $valuecell = new html_table_cell($value);
     $row->cells = [$labelcell, $valuecell];
     return $row;
+}
+
+/**
+ * A browser can show these types inside the grading page. Other types stay a download,
+ * and HTML is never rendered, so a submitted page cannot run as the teacher.
+ *
+ * @param string $filename
+ * @return bool
+ */
+function streamvoice_report_previewable(string $filename): bool {
+    $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    return in_array($extension, [
+        'pdf', 'txt', 'text', 'csv', 'md', 'log', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'json', 'doc', 'docx',
+    ], true);
+}
+
+/**
+ * Full-screen grading page: the submitted file on one side, the grade on the other.
+ *
+ * @param \mod_streamvoice\client $client
+ * @param \stdClass $cm
+ * @param \stdClass $course
+ * @param \stdClass $instance
+ * @param array<int, \stdClass> $users
+ * @param array<int, array<string, mixed>> $byuser
+ * @param int $userid
+ * @param array<int, array{0: string, 1: string}> $notices
+ */
+function streamvoice_report_grader(
+    $client,
+    \stdClass $cm,
+    \stdClass $course,
+    \stdClass $instance,
+    array $users,
+    array $byuser,
+    int $userid,
+    array $notices
+): void {
+    global $DB, $OUTPUT, $PAGE;
+
+    $ordered = array_values($users);
+    if ($userid <= 0) {
+        foreach ($ordered as $candidate) {
+            if (isset($byuser[(int) $candidate->id])) {
+                $userid = (int) $candidate->id;
+                break;
+            }
+        }
+        if ($userid <= 0 && $ordered) {
+            $userid = (int) $ordered[0]->id;
+        }
+    }
+
+    $pageurl = new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'action' => 'grader']);
+    if ($userid > 0) {
+        $pageurl->param('userid', $userid);
+    }
+    $PAGE->set_url($pageurl);
+    $PAGE->set_pagelayout('embedded');
+    $PAGE->activityheader->disable();
+    $PAGE->add_body_class('sv-grader-page');
+    $PAGE->set_title(get_string('grading', 'assign'));
+    $PAGE->set_heading(format_string($course->fullname));
+
+    echo $OUTPUT->header();
+    foreach ($notices as $notice) {
+        echo $OUTPUT->notification($notice[0], $notice[1]);
+    }
+    if (!$ordered || $userid <= 0) {
+        echo $OUTPUT->notification(get_string('nothingtodisplay'), 'info');
+        echo $OUTPUT->footer();
+        return;
+    }
+
+    $user = $users[$userid] ?? $DB->get_record('user', ['id' => $userid, 'deleted' => 0]);
+    if (!$user) {
+        throw new moodle_exception('invaliduser');
+    }
+    $index = 0;
+    foreach ($ordered as $position => $candidate) {
+        if ((int) $candidate->id === (int) $user->id) {
+            $index = $position;
+            break;
+        }
+    }
+    $previous = $index > 0 ? $ordered[$index - 1] : null;
+    $next = $index < count($ordered) - 1 ? $ordered[$index + 1] : null;
+    $row = $byuser[(int) $user->id] ?? null;
+
+    $options = [];
+    foreach ($ordered as $candidate) {
+        $options[(int) $candidate->id] = fullname($candidate);
+    }
+    $chooser = html_writer::start_tag('form', ['method' => 'get', 'action' => $pageurl->out(false), 'class' => 'sv-grader-chooser']);
+    $chooser .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => $cm->id]);
+    $chooser .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'action', 'value' => 'grader']);
+    $chooser .= html_writer::select($options, 'userid', (int) $user->id, false, [
+        'class' => 'custom-select',
+        'onchange' => 'this.form.submit()',
+        'aria-label' => get_string('user'),
+    ]);
+    $chooser .= html_writer::end_tag('form');
+
+    $nav = html_writer::start_div('sv-grader-nav');
+    $nav .= html_writer::start_div('sv-grader-title');
+    $nav .= html_writer::link(new moodle_url('/course/view.php', ['id' => $course->id]), format_string($course->shortname));
+    $nav .= html_writer::span(' / ', 'text-muted');
+    $nav .= html_writer::link(new moodle_url('/mod/streamvoice/view.php', ['id' => $cm->id]), format_string($instance->name));
+    $nav .= html_writer::div(
+        html_writer::link(new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id]), get_string('viewgrading', 'assign')),
+        'small'
+    );
+    $nav .= html_writer::end_div();
+    $nav .= html_writer::div(
+        $OUTPUT->user_picture($user, ['courseid' => $course->id, 'size' => 35]) . html_writer::span(fullname($user), 'sv-grader-name'),
+        'sv-grader-user'
+    );
+    $switcher = '';
+    if ($previous) {
+        $switcher .= html_writer::link(
+            new moodle_url($pageurl, ['userid' => $previous->id]),
+            get_string('previous'),
+            ['class' => 'btn btn-secondary']
+        );
+    }
+    $switcher .= $chooser;
+    if ($next) {
+        $switcher .= html_writer::link(
+            new moodle_url($pageurl, ['userid' => $next->id]),
+            get_string('next'),
+            ['class' => 'btn btn-secondary']
+        );
+    }
+    $nav .= html_writer::div($switcher, 'sv-grader-switch');
+    $nav .= html_writer::end_div();
+
+    $filename = trim((string) ($row['artifactname'] ?? ''));
+    $review = html_writer::start_div('sv-grader-review');
+    if ($filename === '') {
+        $review .= html_writer::div(get_string('nosubmissionyet', 'assign'), 'sv-grader-empty');
+    } else {
+        $downloadurl = new moodle_url('/mod/streamvoice/report.php', [
+            'id' => $cm->id,
+            'userid' => $user->id,
+            'download' => 1,
+        ]);
+        $bar = html_writer::span(s($filename), 'sv-grader-filename');
+        $bar .= html_writer::link($downloadurl, get_string('download'), ['class' => 'btn btn-secondary']);
+        $review .= html_writer::div($bar, 'sv-grader-filebar');
+        if (streamvoice_report_previewable($filename)) {
+            $previewurl = new moodle_url($downloadurl, ['inline' => 1]);
+            $frame = [
+                'src' => $previewurl,
+                'title' => $filename,
+            ];
+            $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+            // Chrome will not paint a PDF or an image inside a sandboxed frame.
+            if (!in_array($extension, ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp'], true)) {
+                $frame['sandbox'] = 'allow-downloads';
+            }
+            $review .= html_writer::tag('iframe', '', $frame);
+        } else {
+            $review .= html_writer::div(get_string('previewunavailable', 'streamvoice'), 'sv-grader-empty');
+        }
+    }
+    $review .= html_writer::end_div();
+
+    $grade = html_writer::start_div('sv-grader-grade');
+    $answers = [];
+    $report = [];
+    if ($row && $client->is_configured()) {
+        $detail = $client->submission_report((int) $cm->id, (int) ($row['id'] ?? 0));
+        if ($detail['ok']) {
+            $report = is_array($detail['data']['report'] ?? null) ? $detail['data']['report'] : [];
+            $answers = is_array($detail['data']['answers'] ?? null) ? $detail['data']['answers'] : [];
+        } else {
+            $grade .= $OUTPUT->notification(streamvoice_error_text($detail), 'error');
+        }
+    }
+    $gradeobj = null;
+    $info = grade_get_grades($course->id, 'mod', 'streamvoice', $instance->id, [(int) $user->id]);
+    $itemgrades = $info->items[0]->grades ?? null;
+    if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
+        $gradeobj = $itemgrades[$user->id];
+    }
+    $grade .= streamvoice_report_parts_form($user, $row, $report, $instance, $pageurl, $gradeobj);
+    if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
+        $grade .= streamvoice_report_answers($answers);
+    }
+    $grade .= html_writer::end_div();
+
+    echo html_writer::div($nav . html_writer::div($review . $grade, 'sv-grader-body'), 'sv-grader');
+    echo $OUTPUT->footer();
 }
