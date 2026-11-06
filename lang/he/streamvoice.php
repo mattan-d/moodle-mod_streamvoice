@@ -105,3 +105,15 @@ $string['error_file_too_large'] = 'הקובץ גדול מהגודל המותר.'
 $string['error_unknown_activity'] = 'הפעילות עדיין לא רשומה ב-Stream. פתחו אותה שוב אחרי השמירה.';
 $string['error_no_submission'] = 'יש להגיש ולנעול את העבודה לפני תחילת Stream Voice.';
 $string['error_not_configured'] = 'Stream לא מוגדר.';
+
+$string['recordtest'] = 'בדיקת הקלטה';
+$string['recordtest_desc'] = 'מקליטים כמה שניות בדפדפן ושומעים אותן מיד. הבדיקה לא נשמרת ולא נשלחת ל-Stream. היא משתמשת באותה פתיחה של מצלמה ומיקרופון כמו בהגנה.';
+$string['recordteststart'] = 'פתיחת בדיקת ההקלטה';
+$string['recordtestintro'] = 'אומרים כמה מילים, עוצרים, ומאזינים. התמונה בזמן ההקלטה נשארת בלי קול כדי שלא יהיה הד. ההשמעה למטה היא ההקלטה עצמה, עם קול. שום דבר לא מועלה.';
+$string['recordtestrecord'] = 'הקלטה';
+$string['recordteststop'] = 'עצירה';
+$string['recordtestlevel'] = 'עוצמת המיקרופון';
+$string['recordtestmic'] = 'מיקרופון';
+$string['recordtestsound'] = 'המיקרופון נשמע בהקלטה הזו.';
+$string['recordtestsilent'] = 'מההתקן «{$a}» לא הגיע קול. אם זה לא המיקרופון שלכם, בחרו אחר למעלה ונסו שוב.';
+$string['recordtestfailed'] = 'לא ניתן לפתוח את המצלמה או את המיקרופון.';

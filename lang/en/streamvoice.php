@@ -105,3 +105,15 @@ $string['error_file_too_large'] = 'The file is larger than the allowed size.';
 $string['error_unknown_activity'] = 'Stream does not have this activity yet. Open the activity again after saving it.';
 $string['error_no_submission'] = 'Submit and lock the work before starting Stream Voice.';
 $string['error_not_configured'] = 'Stream is not configured.';
+
+$string['recordtest'] = 'Recording test';
+$string['recordtest_desc'] = 'Record a few seconds in the browser and play them back. The test is not saved and is not sent to Stream. It uses the same camera and microphone setup as a defense recording.';
+$string['recordteststart'] = 'Open the recording test';
+$string['recordtestintro'] = 'Say a few words, stop, and listen. The live picture stays silent so the microphone does not howl. The playback below is the recording itself, with sound. Nothing is uploaded.';
+$string['recordtestrecord'] = 'Record';
+$string['recordteststop'] = 'Stop';
+$string['recordtestlevel'] = 'Microphone level';
+$string['recordtestmic'] = 'Microphone';
+$string['recordtestsound'] = 'The microphone was heard in this recording.';
+$string['recordtestsilent'] = 'No sound arrived from «{$a}». If that is not your microphone, choose another one above and try again.';
+$string['recordtestfailed'] = 'The camera or microphone could not be opened.';
