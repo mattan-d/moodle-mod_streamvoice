@@ -12,7 +12,7 @@ Stream Voice is the activity shell inside Moodle. Question generation, the timer
 
 A short Hebrew overview for the people who run an institution's systems. It uses the real screens: the student defense, the lock, the teacher's grade, and what is written to the gradebook.
 
-[Stream Voice for institutions (1:37)](docs/stream-voice-institutions.mp4)
+[Stream Voice for institutions (1:44)](docs/stream-voice-institutions.mp4)
 
 ## Requirements
 
