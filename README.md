@@ -8,6 +8,12 @@ The aim is to see that the student understands the work and can justify it. The 
 
 Stream Voice is the activity shell inside Moodle. Question generation, the timer, recording, transcription, the rubric and the score run in [Stream](https://stream-platform.cloud/).
 
+## For the institution
+
+A short Hebrew overview for the people who run an institution's systems. It uses the real screens: the student defense, the lock, the teacher's grade, and what is written to the gradebook.
+
+[Stream Voice for institutions (1:37)](docs/stream-voice-institutions.mp4)
+
 ## Requirements
 
 * Moodle 4.5 or later.
