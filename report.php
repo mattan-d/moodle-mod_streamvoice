@@ -1038,6 +1038,14 @@ function streamvoice_report_answers($answers, ?string $sharedfeedback = null): s
         if (!is_array($answer)) {
             continue;
         }
+        if (array_key_exists('selected', $answer) && empty($answer['selected'])) {
+            $html .= html_writer::div(
+                html_writer::tag('h4', s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-1', 'dir' => 'auto'])
+                . html_writer::div(get_string('questionskipped', 'streamvoice'), 'text-muted'),
+                'streamvoice-answer mb-3'
+            );
+            continue;
+        }
         $head = html_writer::start_div('sv-qhead');
         $head .= html_writer::tag('h4', $number . '. ' . s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-0', 'dir' => 'auto']);
         if (isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
@@ -1159,7 +1167,10 @@ function streamvoice_report_defense_explain(array $answers, array $report, int $
     $scores = [];
     $number = 1;
     foreach ($answers as $answer) {
-        if (is_array($answer) && isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
+        if (!is_array($answer) || (array_key_exists('selected', $answer) && empty($answer['selected']))) {
+            continue;
+        }
+        if (isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
             $scores[] = ['number' => $number, 'score' => (float) $answer['score']];
         }
         $number++;
