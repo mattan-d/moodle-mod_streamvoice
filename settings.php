@@ -25,6 +25,26 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($ADMIN->fulltree) {
+    $settings->add(new admin_setting_heading(
+        'streamvoice_questions',
+        get_string('questionsettings', 'streamvoice'),
+        get_string('questionsettings_desc', 'streamvoice')
+    ));
+    $settings->add(new admin_setting_configtext(
+        'streamvoice/generatecount',
+        get_string('generatecount', 'streamvoice'),
+        get_string('generatecount_help', 'streamvoice'),
+        5,
+        PARAM_INT
+    ));
+    $settings->add(new admin_setting_configtext(
+        'streamvoice/answercount',
+        get_string('answercount', 'streamvoice'),
+        get_string('answercount_help', 'streamvoice'),
+        3,
+        PARAM_INT
+    ));
+
     $url = (new moodle_url('/mod/streamvoice/recordtest.php'))->out(false);
     $settings->add(new admin_setting_heading(
         'streamvoice_recordtest',

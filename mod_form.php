@@ -64,10 +64,16 @@ class mod_streamvoice_mod_form extends moodleform_mod {
         $mform->setDefault('answerseconds', 120);
         $mform->addHelpButton('answerseconds', 'answerseconds', 'streamvoice');
 
-        $mform->addElement('text', 'questioncount', get_string('questioncount', 'streamvoice'));
-        $mform->setType('questioncount', PARAM_INT);
-        $mform->setDefault('questioncount', 3);
-        $mform->addHelpButton('questioncount', 'questioncount', 'streamvoice');
+        $limits = \mod_streamvoice\client::question_limits();
+        $mform->addElement(
+            'static',
+            'questionlimits',
+            get_string('questionlimits', 'streamvoice'),
+            get_string('questionlimits_desc', 'streamvoice', (object) [
+                'generate' => $limits['generate'],
+                'answer' => $limits['answer'],
+            ])
+        );
 
         $mform->addElement('textarea', 'fixedquestions', get_string('fixedquestions', 'streamvoice'), 'wrap="virtual" rows="6" cols="70"');
         $mform->setType('fixedquestions', PARAM_RAW_TRIMMED);
@@ -111,10 +117,6 @@ class mod_streamvoice_mod_form extends moodleform_mod {
         $oral = (int) ($data['weightoral'] ?? 0);
         if ($file + $oral !== 100) {
             $errors['weightfile'] = get_string('weightsmust100', 'streamvoice');
-        }
-        $count = (int) ($data['questioncount'] ?? 0);
-        if ($count < 1 || $count > 8) {
-            $errors['questioncount'] = get_string('questioncountrange', 'streamvoice');
         }
         $prep = (int) ($data['prepseconds'] ?? 0);
         if ($prep < 0 || $prep > 3600) {
