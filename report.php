@@ -108,7 +108,8 @@ if ($download && $userid) {
     streamvoice_report_download($client, $cm, $byuser[$userid] ?? null, (bool) optional_param('inline', 0, PARAM_BOOL));
 }
 
-$gradesaved = streamvoice_report_save_grades($instance, $context);
+$rubricsaved = streamvoice_report_save_oral_rubric($instance, $cm);
+$gradesaved = $rubricsaved === true ? true : streamvoice_report_save_grades($instance, $context);
 if ($gradesaved === true) {
     $back = new moodle_url($pageurl);
     if (optional_param('action', '', PARAM_ALPHA) === 'grader') {
@@ -117,7 +118,10 @@ if ($gradesaved === true) {
     if ($userid) {
         $back->param('userid', $userid);
     }
-    redirect($back, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
+    $message = $rubricsaved === true
+        ? get_string('oralrubricsaved', 'streamvoice')
+        : get_string('changessaved');
+    redirect($back, $message, null, \core\output\notification::NOTIFY_SUCCESS);
 } else if (is_string($gradesaved)) {
     $notices[] = [$gradesaved, 'error'];
 }
@@ -392,6 +396,26 @@ function streamvoice_report_download($client, \stdClass $cm, ?array $row, bool $
  * @param \context $context
  * @return true|string|null true when saved, an error string, or null when this is not a save
  */
+/**
+ * Save the oral rubric the teacher edited on the grading page. Existing scores are not recalculated.
+ *
+ * @param \stdClass $instance
+ * @param \stdClass $cm
+ * @return bool|null
+ */
+function streamvoice_report_save_oral_rubric(\stdClass $instance, \stdClass $cm): ?bool {
+    global $DB;
+
+    if (!data_submitted() || !confirm_sesskey() || !optional_param('saverubric', 0, PARAM_BOOL)) {
+        return null;
+    }
+    $instance->rubric = optional_param('oralrubric', '', PARAM_RAW_TRIMMED);
+    $instance->timemodified = time();
+    $DB->update_record('streamvoice', $instance);
+    streamvoice_push($instance, (int) $cm->id);
+    return true;
+}
+
 function streamvoice_report_save_grades(\stdClass $instance, \context $context) {
     if (!data_submitted() || !confirm_sesskey() || !optional_param('savegrades', 0, PARAM_BOOL)) {
         return null;
@@ -419,6 +443,10 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
         }
         $work = unformat_float($workraw, true);
         $defense = unformat_float($defenseraw, true);
+        $fromrubric = streamvoice_work_rubric_grade($context, $userid, $grademax);
+        if ($fromrubric !== null) {
+            $work = $fromrubric;
+        }
         if ($work === false || $defense === false || $work < 0 || $defense < 0 || $work > $grademax || $defense > $grademax) {
             return get_string('gradeoutofrange', 'streamvoice', format_float($grademax, 2));
         }
@@ -481,7 +509,8 @@ function streamvoice_report_parts_form(
     array $report,
     \stdClass $instance,
     moodle_url $action,
-    $gradeobj
+    $gradeobj,
+    \stdClass $cm
 ): string {
     $grademax = (int) ($instance->grade ?? 0);
     if ($grademax <= 0) {
@@ -506,6 +535,25 @@ function streamvoice_report_parts_form(
         ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
     );
     $html .= html_writer::div(get_string('aidiscretion', 'streamvoice'), 'small text-muted mb-2');
+    $html .= html_writer::div(get_string('oralhow', 'streamvoice'), 'small mb-2');
+    $answerscores = [];
+    foreach ($report['answers'] ?? [] as $answer) {
+        if (is_array($answer) && isset($answer['score']) && $answer['score'] !== '' && $answer['score'] !== null) {
+            $answerscores[] = format_float((float) $answer['score'], 0);
+        }
+    }
+    if ($oral !== null && $oral !== '' && $answerscores) {
+        $html .= html_writer::div(get_string('oralaverage', 'streamvoice', (object) [
+            'average' => format_float((float) $oral, 1),
+            'scores' => implode(', ', $answerscores),
+        ]), 'small mb-2', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']);
+    }
+    $usedrubric = trim((string) ($report['rubric'] ?? ''));
+    if ($usedrubric !== '') {
+        $html .= html_writer::div(get_string('rubricused', 'streamvoice'), 'sv-label mt-3');
+        $html .= html_writer::div(s($usedrubric), 'sv-used-rubric');
+    }
+    $html .= streamvoice_report_oral_form($instance, $cm, $action);
     if ($consistency !== null && $consistency !== '') {
         $html .= html_writer::div(
             get_string('consistency', 'streamvoice') . ': ' . format_float((float) $consistency, 1),
@@ -555,6 +603,7 @@ function streamvoice_report_parts_form(
     ]);
     $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
+    $html .= streamvoice_work_rubric_html(context_module::instance($cm->id), (int) $user->id, $grademax);
     $html .= $field(get_string('workgrade', 'streamvoice'), 'workgrade', $savedwork);
     $html .= $field(get_string('defensegrade', 'streamvoice'), 'defensegrade', $defensevalue);
     $html .= html_writer::div(get_string('finalgrade', 'grades'), 'sv-label mt-3');
@@ -903,7 +952,8 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
             $report,
             $instance,
             new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]),
-            $gradeobj
+            $gradeobj,
+            $cm
         );
     }
 
@@ -987,6 +1037,9 @@ function streamvoice_report_answers($answers): string {
         $side = '';
         if (!empty($answer['feedback'])) {
             $side .= html_writer::div(format_text((string) $answer['feedback'], FORMAT_PLAIN), 'mb-3');
+        }
+        if (!empty($answer['basis']) && is_array($answer['basis'])) {
+            $side .= streamvoice_report_meters($answer['basis']);
         }
         if (!empty($answer['transcript'])) {
             $side .= html_writer::div(get_string('transcript', 'streamvoice'), 'sv-label');
@@ -1213,7 +1266,7 @@ function streamvoice_report_grader(
     if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
         $gradeobj = $itemgrades[$user->id];
     }
-    $grade .= streamvoice_report_parts_form($user, $row, $report, $instance, $pageurl, $gradeobj);
+    $grade .= streamvoice_report_parts_form($user, $row, $report, $instance, $pageurl, $gradeobj, $cm);
     if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
         $grade .= streamvoice_report_answers($answers);
     }
