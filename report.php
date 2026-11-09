@@ -108,8 +108,7 @@ if ($download && $userid) {
     streamvoice_report_download($client, $cm, $byuser[$userid] ?? null, (bool) optional_param('inline', 0, PARAM_BOOL));
 }
 
-$rubricsaved = streamvoice_report_save_oral_rubric($instance, $cm);
-$gradesaved = $rubricsaved === true ? true : streamvoice_report_save_grades($instance, $context);
+$gradesaved = streamvoice_report_save_grades($instance, $context);
 if ($gradesaved === true) {
     $back = new moodle_url($pageurl);
     if (optional_param('action', '', PARAM_ALPHA) === 'grader') {
@@ -118,10 +117,7 @@ if ($gradesaved === true) {
     if ($userid) {
         $back->param('userid', $userid);
     }
-    $message = $rubricsaved === true
-        ? get_string('oralrubricsaved', 'streamvoice')
-        : get_string('changessaved');
-    redirect($back, $message, null, \core\output\notification::NOTIFY_SUCCESS);
+    redirect($back, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
 } else if (is_string($gradesaved)) {
     $notices[] = [$gradesaved, 'error'];
 }
@@ -390,26 +386,6 @@ function streamvoice_report_download($client, \stdClass $cm, ?array $row, bool $
 }
 
 /**
- * Save the oral rubric the teacher edited on the grading page. Existing scores are not recalculated.
- *
- * @param \stdClass $instance
- * @param \stdClass $cm
- * @return bool|null
- */
-function streamvoice_report_save_oral_rubric(\stdClass $instance, \stdClass $cm): ?bool {
-    global $DB;
-
-    if (!data_submitted() || !confirm_sesskey() || !optional_param('saverubric', 0, PARAM_BOOL)) {
-        return null;
-    }
-    $instance->rubric = optional_param('oralrubric', '', PARAM_RAW_TRIMMED);
-    $instance->timemodified = time();
-    $DB->update_record('streamvoice', $instance);
-    streamvoice_push($instance, (int) $cm->id);
-    return true;
-}
-
-/**
  * Save marker edits from the submissions table. Unchanged values are left alone.
  *
  * @param \stdClass $instance
@@ -423,6 +399,28 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
     $grademax = (int) ($instance->grade ?? 0);
     if ($grademax <= 0) {
         return null;
+    }
+    global $DB, $USER;
+    $postedrubric = optional_param('oralrubric', null, PARAM_RAW);
+    $cmid = optional_param('id', 0, PARAM_INT);
+    if ($postedrubric !== null && trim($postedrubric) !== trim((string) ($instance->rubric ?? ''))) {
+        $instance->rubric = trim($postedrubric);
+        $DB->update_record('streamvoice', (object) [
+            'id' => $instance->id,
+            'rubric' => $instance->rubric,
+            'timemodified' => time(),
+        ]);
+        if ($cmid > 0) {
+            streamvoice_push($instance, $cmid);
+        }
+    }
+    $submitted = data_submitted();
+    $workrubric = [];
+    if ($submitted && isset($submitted->workrubric)) {
+        $decoded = json_decode(json_encode($submitted->workrubric), true);
+        if (is_array($decoded)) {
+            $workrubric = $decoded;
+        }
     }
     $works = optional_param_array('workgrade', [], PARAM_RAW);
     $defenses = optional_param_array('defensegrade', [], PARAM_RAW);
@@ -443,9 +441,11 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
         }
         $work = unformat_float($workraw, true);
         $defense = unformat_float($defenseraw, true);
-        $fromrubric = streamvoice_work_rubric_grade($context, $userid, $grademax);
-        if ($fromrubric !== null) {
-            $work = $fromrubric;
+        if ($workrubric) {
+            $fromrubric = \mod_streamvoice\workrubric::grade($context, (int) $USER->id, $userid, $workrubric, $grademax);
+            if ($fromrubric !== null) {
+                $work = $fromrubric;
+            }
         }
         if ($work === false || $defense === false || $work < 0 || $defense < 0 || $work > $grademax || $defense > $grademax) {
             return get_string('gradeoutofrange', 'streamvoice', format_float($grademax, 2));
@@ -501,6 +501,8 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
  * @param \stdClass $instance
  * @param \moodle_url $action
  * @param \stdClass|null $gradeobj
+ * @param array<int, mixed> $answers
+ * @param \stdClass|null $cm
  * @return string
  */
 function streamvoice_report_parts_form(
@@ -510,8 +512,10 @@ function streamvoice_report_parts_form(
     \stdClass $instance,
     moodle_url $action,
     $gradeobj,
-    \stdClass $cm
+    array $answers = [],
+    ?\stdClass $cm = null
 ): string {
+    global $USER;
     $grademax = (int) ($instance->grade ?? 0);
     if ($grademax <= 0) {
         $grademax = 100;
@@ -535,25 +539,7 @@ function streamvoice_report_parts_form(
         ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']
     );
     $html .= html_writer::div(get_string('aidiscretion', 'streamvoice'), 'small text-muted mb-2');
-    $html .= html_writer::div(get_string('oralhow', 'streamvoice'), 'small mb-2');
-    $answerscores = [];
-    foreach ($report['answers'] ?? [] as $answer) {
-        if (is_array($answer) && isset($answer['score']) && $answer['score'] !== '' && $answer['score'] !== null) {
-            $answerscores[] = format_float((float) $answer['score'], 0);
-        }
-    }
-    if ($oral !== null && $oral !== '' && $answerscores) {
-        $html .= html_writer::div(get_string('oralaverage', 'streamvoice', (object) [
-            'average' => format_float((float) $oral, 1),
-            'scores' => implode(', ', $answerscores),
-        ]), 'small mb-2', ['dir' => 'ltr', 'style' => 'unicode-bidi:isolate']);
-    }
-    $usedrubric = trim((string) ($report['rubric'] ?? ''));
-    if ($usedrubric !== '') {
-        $html .= html_writer::div(get_string('rubricused', 'streamvoice'), 'sv-label mt-3');
-        $html .= html_writer::div(s($usedrubric), 'sv-used-rubric');
-    }
-    $html .= streamvoice_report_oral_form($instance, $cm, $action);
+    $html .= streamvoice_report_defense_explain($answers, $report, $grademax, streamvoice_report_shared_feedback($answers));
     if ($consistency !== null && $consistency !== '') {
         $html .= html_writer::div(
             get_string('consistency', 'streamvoice') . ': ' . format_float((float) $consistency, 1),
@@ -600,10 +586,31 @@ function streamvoice_report_parts_form(
         'class' => 'sv-grade-parts',
         'data-file-weight' => $fileweight,
         'data-oral-weight' => $oralweight,
+        'data-grade-max' => $grademax,
     ]);
+    if ($cm) {
+        $html .= \mod_streamvoice\workrubric::html(
+            context_module::instance($cm->id),
+            (int) $USER->id,
+            (int) $user->id,
+            $action
+        );
+    }
     $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
     $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'savegrades', 'value' => 1]);
-    $html .= streamvoice_work_rubric_html(context_module::instance($cm->id), (int) $user->id, $grademax);
+    $editing = trim((string) ($instance->rubric ?? ''));
+    if ($editing === '') {
+        $editing = trim((string) ($report['rubric'] ?? ''));
+    }
+    $html .= html_writer::start_tag('details', ['class' => 'sv-oral-rubric mt-2 mb-3']);
+    $html .= html_writer::tag('summary', get_string('oralrubricedit', 'streamvoice'));
+    $html .= html_writer::div(get_string('oralrubricnote', 'streamvoice'), 'small text-muted my-2');
+    $html .= html_writer::tag('textarea', s($editing), [
+        'name' => 'oralrubric',
+        'rows' => 6,
+        'class' => 'form-control',
+    ]);
+    $html .= html_writer::end_tag('details');
     $html .= $field(get_string('workgrade', 'streamvoice'), 'workgrade', $savedwork);
     $html .= $field(get_string('defensegrade', 'streamvoice'), 'defensegrade', $defensevalue);
     $html .= html_writer::div(get_string('finalgrade', 'grades'), 'sv-label mt-3');
@@ -637,8 +644,47 @@ function streamvoice_report_parts_form(
         . "                + work.toFixed(2) + ' × ' + fileWeight + '% + '\n"
         . "                + defense.toFixed(2) + ' × ' + oralWeight + '%';\n"
         . "        };\n"
+        . "        var fromRubric = function () {\n"
+        . "            var groups = {};\n"
+        . "            form.querySelectorAll('input[type=radio][name^=\"workrubric[criteria]\"]').forEach(function (input) {\n"
+        . "                var cell = input.closest('td, .level');\n"
+        . "                var node = cell ? cell.querySelector('.scorevalue') : null;\n"
+        . "                var score = node ? parseFloat(node.textContent) : NaN;\n"
+        . "                if (!groups[input.name]) {\n"
+        . "                    groups[input.name] = {max: 0, picked: null};\n"
+        . "                }\n"
+        . "                if (isFinite(score) && score > groups[input.name].max) {\n"
+        . "                    groups[input.name].max = score;\n"
+        . "                }\n"
+        . "                if (input.checked && isFinite(score)) {\n"
+        . "                    groups[input.name].picked = score;\n"
+        . "                }\n"
+        . "            });\n"
+        . "            var names = Object.keys(groups);\n"
+        . "            if (!names.length) {\n"
+        . "                return;\n"
+        . "            }\n"
+        . "            var max = 0;\n"
+        . "            var got = 0;\n"
+        . "            var complete = true;\n"
+        . "            names.forEach(function (name) {\n"
+        . "                max += groups[name].max;\n"
+        . "                if (groups[name].picked === null) {\n"
+        . "                    complete = false;\n"
+        . "                } else {\n"
+        . "                    got += groups[name].picked;\n"
+        . "                }\n"
+        . "            });\n"
+        . "            if (!complete || max <= 0) {\n"
+        . "                return;\n"
+        . "            }\n"
+        . "            var gradeMax = Number(form.getAttribute('data-grade-max')) || 100;\n"
+        . "            form.querySelector('.sv-work').value = (Math.round((got / max) * gradeMax * 100) / 100).toFixed(2);\n"
+        . "            paint();\n"
+        . "        };\n"
         . "        form.querySelector('.sv-work').addEventListener('input', paint);\n"
         . "        form.querySelector('.sv-defense').addEventListener('input', paint);\n"
+        . "        form.addEventListener('change', fromRubric);\n"
         . "    });\n"
         . "})();"
     );
@@ -953,12 +999,13 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
             $instance,
             new moodle_url('/mod/streamvoice/report.php', ['id' => $cm->id, 'userid' => $user->id]),
             $gradeobj,
+            $answers,
             $cm
         );
     }
 
     if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
-        $html .= streamvoice_report_answers($answers);
+        $html .= streamvoice_report_answers($answers, streamvoice_report_shared_feedback($answers));
     }
     return $html;
 }
@@ -969,7 +1016,7 @@ function streamvoice_report_detail($client, \stdClass $cm, \stdClass $course, \s
  * @param mixed $answers
  * @return string
  */
-function streamvoice_report_answers($answers): string {
+function streamvoice_report_answers($answers, ?string $sharedfeedback = null): string {
     global $OUTPUT;
 
     $html = html_writer::tag('style',
@@ -995,7 +1042,7 @@ function streamvoice_report_answers($answers): string {
         $head .= html_writer::tag('h4', $number . '. ' . s((string) ($answer['prompt'] ?? '')), ['class' => 'h5 mb-0', 'dir' => 'auto']);
         if (isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
             $head .= html_writer::span(
-                get_string('answerscore', 'streamvoice') . ' ' . s((string) $answer['score']),
+                get_string('answerscore', 'streamvoice') . ' ' . s((string) $answer['score']) . ' / 100',
                 'text-nowrap font-weight-bold',
                 ['style' => 'margin-inline-start:.75rem']
             );
@@ -1035,11 +1082,8 @@ function streamvoice_report_answers($answers): string {
             ]);
         }
         $side = '';
-        if (!empty($answer['feedback'])) {
+        if ($sharedfeedback === null && !empty($answer['feedback'])) {
             $side .= html_writer::div(format_text((string) $answer['feedback'], FORMAT_PLAIN), 'mb-3');
-        }
-        if (!empty($answer['basis']) && is_array($answer['basis'])) {
-            $side .= streamvoice_report_meters($answer['basis']);
         }
         if (!empty($answer['transcript'])) {
             $side .= html_writer::div(get_string('transcript', 'streamvoice'), 'sv-label');
@@ -1064,70 +1108,89 @@ function streamvoice_report_answers($answers): string {
  * @return string
  */
 function streamvoice_report_transcript(string $transcript): string {
-    $clean = preg_replace('/\[[0-9:.\s-]+\]/u', ' ', $transcript) ?? $transcript;
-    $clean = preg_replace('/\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?\s*-->\s*\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?/u', ' ', $clean) ?? $clean;
-    $clean = preg_replace('/[ \t]{2,}/u', ' ', $clean) ?? $clean;
-    $clean = preg_replace("/\n[ \t]*\n(?:[ \t]*\n)+/", "\n\n", $clean) ?? $clean;
-    return s(trim($clean));
+    $clean = preg_replace('/\[[0-9:.\s,\-]+\]/u', '', $transcript);
+    if (!is_string($clean)) {
+        $clean = $transcript;
+    }
+    $clean = preg_replace("/[ \t]{2,}/u", ' ', $clean);
+    $clean = preg_replace("/\n{3,}/u", "\n\n", (string) $clean);
+    return s(trim((string) $clean));
 }
 
 /**
- * Two bars that show which rubric limit set this answer's score.
+ * The remark shown on every answer, when it does not distinguish the scores.
  *
- * @param array<string, mixed> $basis
- * @return string
+ * @param array<int, mixed> $answers
+ * @return string|null
  */
-function streamvoice_report_meters(array $basis): string {
-    $rows = [
-        [get_string('understandinglimit', 'streamvoice'), $basis['understanding'] ?? null],
-        [get_string('consistencylimit', 'streamvoice'), $basis['consistency'] ?? null],
-    ];
-    $html = html_writer::start_div('sv-split');
-    foreach ($rows as [$label, $value]) {
-        if ($value === null || $value === '') {
+function streamvoice_report_shared_feedback(array $answers): ?string {
+    $texts = [];
+    foreach ($answers as $answer) {
+        if (!is_array($answer)) {
             continue;
         }
-        $width = max(0, min(100, (float) $value));
-        $row = html_writer::span($label);
-        $row .= html_writer::div(html_writer::tag('span', '', ['style' => 'width:' . $width . '%']), 'sv-meter');
-        $row .= html_writer::span(format_float($width, 0));
-        $html .= html_writer::div($row, 'sv-split-row');
+        $text = trim((string) ($answer['feedback'] ?? ''));
+        if ($text !== '') {
+            $texts[] = $text;
+        }
     }
-    $html .= html_writer::end_div();
-    return $html;
+    if (count($texts) < 2) {
+        return null;
+    }
+    foreach ($texts as $text) {
+        if ($text !== $texts[0]) {
+            return null;
+        }
+    }
+    return $texts[0];
 }
 
 /**
- * Edit the oral rubric. An empty rubric keeps Stream's default. Saving does not rescore past defenses.
+ * How the defense grade is the average of the answer scores, against the rubric that was used.
  *
- * @param \stdClass $instance
- * @param \stdClass $cm
- * @param \moodle_url $action
+ * @param array<int, mixed> $answers
+ * @param array<string, mixed> $report
+ * @param int $grademax
+ * @param string|null $shared
  * @return string
  */
-function streamvoice_report_oral_form(\stdClass $instance, \stdClass $cm, moodle_url $action): string {
-    $html = html_writer::start_tag('form', [
-        'method' => 'post',
-        'action' => $action->out(false),
-        'class' => 'sv-oral-rubric mb-3',
-    ]);
-    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
-    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => (int) $cm->id]);
-    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'saverubric', 'value' => 1]);
-    $html .= html_writer::div(get_string('editoralrubric', 'streamvoice'), 'sv-label');
-    $html .= html_writer::div(get_string('editoralrubric_help', 'streamvoice'), 'small text-muted mb-2');
-    $html .= html_writer::tag('textarea', s((string) ($instance->rubric ?? '')), [
-        'name' => 'oralrubric',
-        'rows' => 6,
-        'class' => 'form-control',
-    ]);
-    $html .= html_writer::empty_tag('input', [
-        'type' => 'submit',
-        'value' => get_string('savechanges'),
-        'class' => 'btn btn-secondary mt-2',
-    ]);
-    $html .= html_writer::end_tag('form');
-    return $html;
+function streamvoice_report_defense_explain(array $answers, array $report, int $grademax, ?string $shared): string {
+    $scores = [];
+    $number = 1;
+    foreach ($answers as $answer) {
+        if (is_array($answer) && isset($answer['score']) && $answer['score'] !== null && $answer['score'] !== '') {
+            $scores[] = ['number' => $number, 'score' => (float) $answer['score']];
+        }
+        $number++;
+    }
+    $rubric = trim((string) ($report['rubric'] ?? ''));
+    if (!$scores && $rubric === '' && $shared === null) {
+        return '';
+    }
+    $html = html_writer::div(get_string('defensehow', 'streamvoice', $grademax), 'small mb-2');
+    foreach ($scores as $item) {
+        $width = max(0, min(100, $item['score']));
+        $bar = html_writer::div(
+            html_writer::div('', 'fill', ['style' => 'width:' . $width . '%']),
+            'track',
+            ['dir' => 'ltr']
+        );
+        $html .= html_writer::div(
+            html_writer::span(get_string('answernum', 'streamvoice', $item['number']), 'sv-score-name')
+            . $bar
+            . html_writer::span(format_float($item['score'], 1) . ' / 100', 'num', ['dir' => 'ltr']),
+            'sv-scorebar'
+        );
+    }
+    if ($rubric !== '') {
+        $html .= html_writer::div(get_string('oralrubricused', 'streamvoice'), 'sv-label mt-2');
+        $html .= html_writer::div(s($rubric), 'sv-rubric-used small');
+    }
+    if ($shared !== null) {
+        $html .= html_writer::div(get_string('defensesame', 'streamvoice'), 'small text-muted mt-2');
+        $html .= html_writer::div(format_text($shared, FORMAT_PLAIN), 'small');
+    }
+    return html_writer::div($html, 'sv-defense-explain mb-3');
 }
 
 /**
@@ -1327,9 +1390,9 @@ function streamvoice_report_grader(
     if (is_array($itemgrades) && isset($itemgrades[$user->id])) {
         $gradeobj = $itemgrades[$user->id];
     }
-    $grade .= streamvoice_report_parts_form($user, $row, $report, $instance, $pageurl, $gradeobj, $cm);
+    $grade .= streamvoice_report_parts_form($user, $row, $report, $instance, $pageurl, $gradeobj, $answers, $cm);
     if ($row && $client->is_configured() && ($detail['ok'] ?? false)) {
-        $grade .= streamvoice_report_answers($answers);
+        $grade .= streamvoice_report_answers($answers, streamvoice_report_shared_feedback($answers));
     }
     $grade .= html_writer::end_div();
 
