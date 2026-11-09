@@ -390,13 +390,6 @@ function streamvoice_report_download($client, \stdClass $cm, ?array $row, bool $
 }
 
 /**
- * Save marker edits from the submissions table. Unchanged values are left alone.
- *
- * @param \stdClass $instance
- * @param \context $context
- * @return true|string|null true when saved, an error string, or null when this is not a save
- */
-/**
  * Save the oral rubric the teacher edited on the grading page. Existing scores are not recalculated.
  *
  * @param \stdClass $instance
@@ -416,6 +409,13 @@ function streamvoice_report_save_oral_rubric(\stdClass $instance, \stdClass $cm)
     return true;
 }
 
+/**
+ * Save marker edits from the submissions table. Unchanged values are left alone.
+ *
+ * @param \stdClass $instance
+ * @param \context $context
+ * @return true|string|null true when saved, an error string, or null when this is not a save
+ */
 function streamvoice_report_save_grades(\stdClass $instance, \context $context) {
     if (!data_submitted() || !confirm_sesskey() || !optional_param('savegrades', 0, PARAM_BOOL)) {
         return null;
