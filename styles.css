@@ -60,7 +60,7 @@
 }
 
 .path-mod-streamvoice .sv-grader-review {
-    flex: 1 1 auto;
+    flex: 1 1 52%;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -99,8 +99,8 @@
 }
 
 .path-mod-streamvoice .sv-grader-grade {
-    flex: 0 0 28rem;
-    max-width: 40%;
+    flex: 1 1 36rem;
+    max-width: 48%;
     overflow: auto;
     padding: 1rem;
     background: #f8f9fa;
@@ -116,8 +116,76 @@
     margin: 0 0 0.35rem;
 }
 
-.path-mod-streamvoice .sv-grader-form textarea {
+.path-mod-streamvoice .sv-grader-form textarea,
+.path-mod-streamvoice .sv-oral-rubric textarea {
     width: 100%;
+}
+
+.path-mod-streamvoice .sv-meter {
+    flex: 1 1 auto;
+    height: 0.45rem;
+    background: #e9ecef;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.path-mod-streamvoice .sv-meter > span {
+    display: block;
+    height: 100%;
+    background: #0d6efd;
+}
+
+.path-mod-streamvoice .sv-split {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0.75rem;
+}
+
+.path-mod-streamvoice .sv-split-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.path-mod-streamvoice .sv-split-row span:first-child {
+    flex: 0 0 7rem;
+}
+
+.path-mod-streamvoice .sv-split-row span:last-child {
+    flex: 0 0 2.5rem;
+    text-align: end;
+}
+
+.path-mod-streamvoice .sv-rubric-level {
+    display: flex;
+    gap: 0.35rem;
+    margin: 0.35rem 0 0.75rem;
+}
+
+.path-mod-streamvoice .sv-rubric-level label {
+    flex: 1 1 0;
+    margin: 0;
+    padding: 0.35rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.35rem;
+    background: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.path-mod-streamvoice .sv-rubric-level label:has(input:checked) {
+    border-color: #0d6efd;
+    background: #e7f1ff;
+}
+
+.path-mod-streamvoice .sv-used-rubric {
+    white-space: pre-wrap;
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
 }
 
 .path-mod-streamvoice .sv-grader-grade .streamvoice-answer iframe.sv-player,
