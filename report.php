@@ -393,6 +393,7 @@ function streamvoice_report_download($client, \stdClass $cm, ?array $row, bool $
  * @return true|string|null true when saved, an error string, or null when this is not a save
  */
 function streamvoice_report_save_grades(\stdClass $instance, \context $context) {
+    global $DB, $USER;
     if (!data_submitted() || !confirm_sesskey() || !optional_param('savegrades', 0, PARAM_BOOL)) {
         return null;
     }
@@ -400,7 +401,6 @@ function streamvoice_report_save_grades(\stdClass $instance, \context $context) 
     if ($grademax <= 0) {
         return null;
     }
-    global $DB, $USER;
     $postedrubric = optional_param('oralrubric', null, PARAM_RAW);
     $cmid = optional_param('id', 0, PARAM_INT);
     if ($postedrubric !== null && trim($postedrubric) !== trim((string) ($instance->rubric ?? ''))) {
@@ -1112,7 +1112,8 @@ function streamvoice_report_transcript(string $transcript): string {
     if (!is_string($clean)) {
         $clean = $transcript;
     }
-    $clean = preg_replace("/[ \t]{2,}/u", ' ', $clean);
+    $clean = preg_replace('/^[ \t]+|[ \t]+$/mu', '', (string) $clean);
+    $clean = preg_replace("/[ \t]{2,}/u", ' ', (string) $clean);
     $clean = preg_replace("/\n{3,}/u", "\n\n", (string) $clean);
     return s(trim((string) $clean));
 }
