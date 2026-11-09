@@ -65,6 +65,7 @@ class client {
         global $CFG;
         $host = parse_url($CFG->wwwroot, PHP_URL_HOST);
         $grade = (int) ($instance->grade ?? 100);
+        $counts = self::question_counts($instance);
         return [
             'action' => 'upsert_activity',
             'host' => is_string($host) ? $host : '',
@@ -76,8 +77,8 @@ class client {
             'prepseconds' => (int) ($instance->prepseconds ?? 180),
             'answerseconds' => (int) ($instance->answerseconds ?? 120),
             'questioncount' => (int) ($instance->questioncount ?? 3),
-            'generatecount' => self::question_limits()['generate'],
-            'answercount' => self::question_limits()['answer'],
+            'generatecount' => $counts['generate'],
+            'answercount' => $counts['answer'],
             'fixedquestions' => (string) ($instance->fixedquestions ?? ''),
             'rubric' => (string) ($instance->rubric ?? ''),
             'weightfile' => (int) ($instance->weightfile ?? 40),
@@ -262,12 +263,16 @@ class client {
         string $note,
         int $maxbytes
     ): array {
+        global $DB;
         if (!self::is_configured()) {
             return $this->fail('not_configured', get_string('streamnotconfigured', 'streamvoice'));
         }
         if (!is_readable($filepath)) {
             return $this->fail('missing_file', get_string('error_missing_file', 'streamvoice'));
         }
+        $cm = get_coursemodule_from_id('streamvoice', $cmid, 0, false, MUST_EXIST);
+        $instance = $DB->get_record('streamvoice', ['id' => $cm->instance], '*', MUST_EXIST);
+        $counts = self::question_counts($instance);
         $post = [
             'action' => 'submit_artifact',
             'host' => self::host(),
@@ -279,24 +284,25 @@ class client {
             'moodleuserid' => (int) $user->id,
             'note' => $note,
             'maxbytes' => $maxbytes,
-            'generatecount' => self::question_limits()['generate'],
-            'answercount' => self::question_limits()['answer'],
+            'generatecount' => $counts['generate'],
+            'answercount' => $counts['answer'],
             'file' => new \CURLFile($filepath, 'application/octet-stream', $filename),
         ];
         return $this->request($post, 120);
     }
 
     /**
-     * Site-wide question pool and how many of those questions a student must answer.
+     * Questions written from the file, and how many of them the student must answer.
      *
+     * @param \stdClass $instance
      * @return array{generate: int, answer: int}
      */
-    public static function question_limits(): array {
-        $generate = (int) get_config('streamvoice', 'generatecount');
+    public static function question_counts(\stdClass $instance): array {
+        $generate = (int) ($instance->generatecount ?? 5);
         if ($generate < 1 || $generate > 8) {
             $generate = 5;
         }
-        $answer = (int) get_config('streamvoice', 'answercount');
+        $answer = (int) ($instance->answercount ?? 3);
         if ($answer < 1 || $answer > 8) {
             $answer = 3;
         }

@@ -52,6 +52,7 @@ $string['generatecount'] = 'Questions based on the submission';
 $string['generatecount_help'] = 'How many questions Stream writes from the submitted file. From 1 to 8.';
 $string['answercount'] = 'Questions to answer';
 $string['answercount_help'] = 'How many of the generated questions the student chooses and answers. Not more than the number generated. When the two numbers are equal, there is no choice.';
+$string['answercountrange'] = 'The number of questions to answer must be between 1 and the number written from the submission.';
 $string['questionlimits'] = 'Questions from the submission';
 $string['questionlimits_desc'] = 'Stream writes {$a->generate} questions from the file. The student answers {$a->answer} of them. This is set in the plugin settings.';
 $string['questionskipped'] = 'The student did not choose this question.';

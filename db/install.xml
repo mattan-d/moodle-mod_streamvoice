@@ -15,6 +15,8 @@
                 <FIELD NAME="prepseconds" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="180" SEQUENCE="false"/>
                 <FIELD NAME="answerseconds" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="120" SEQUENCE="false"/>
                 <FIELD NAME="questioncount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="3" SEQUENCE="false"/>
+                <FIELD NAME="generatecount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="5" SEQUENCE="false"/>
+                <FIELD NAME="answercount" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="3" SEQUENCE="false"/>
                 <FIELD NAME="fixedquestions" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
                 <FIELD NAME="rubric" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
                 <FIELD NAME="weightfile" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="40" SEQUENCE="false"/>

@@ -52,6 +52,7 @@ $string['generatecount'] = 'מספר שאלות על בסיס ההגשה';
 $string['generatecount_help'] = 'כמה שאלות Stream יוצר מתוך הקובץ שהוגש. בין 1 ל-8.';
 $string['answercount'] = 'מספר שאלות למענה';
 $string['answercount_help'] = 'כמה מתוך השאלות שנוצרו הסטודנט בוחר ועונה. לא יותר ממספר השאלות שנוצרות. אם המספרים שווים, אין בחירה.';
+$string['answercountrange'] = 'מספר השאלות למענה חייב להיות בין 1 למספר השאלות שנוצרות מההגשה.';
 $string['questionlimits'] = 'שאלות מההגשה';
 $string['questionlimits_desc'] = 'Stream יוצר {$a->generate} שאלות מתוך הקובץ. הסטודנט עונה על {$a->answer} מתוכן. זה נקבע בהגדרות התוסף.';
 $string['questionskipped'] = 'הסטודנט לא בחר בשאלה הזו.';

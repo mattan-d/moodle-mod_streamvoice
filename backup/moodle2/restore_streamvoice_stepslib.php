@@ -54,6 +54,15 @@ class restore_streamvoice_activity_structure_step extends restore_activity_struc
         if (empty($data->deflang)) {
             $data->deflang = 'he';
         }
+        if (empty($data->generatecount)) {
+            $data->generatecount = 5;
+        }
+        if (empty($data->answercount)) {
+            $data->answercount = 3;
+        }
+        if ((int) $data->answercount > (int) $data->generatecount) {
+            $data->answercount = (int) $data->generatecount;
+        }
         $newitemid = $DB->insert_record('streamvoice', $data);
         $this->apply_activity_instance($newitemid);
     }

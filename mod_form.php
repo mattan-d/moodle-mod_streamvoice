@@ -64,16 +64,15 @@ class mod_streamvoice_mod_form extends moodleform_mod {
         $mform->setDefault('answerseconds', 120);
         $mform->addHelpButton('answerseconds', 'answerseconds', 'streamvoice');
 
-        $limits = \mod_streamvoice\client::question_limits();
-        $mform->addElement(
-            'static',
-            'questionlimits',
-            get_string('questionlimits', 'streamvoice'),
-            get_string('questionlimits_desc', 'streamvoice', (object) [
-                'generate' => $limits['generate'],
-                'answer' => $limits['answer'],
-            ])
-        );
+        $mform->addElement('text', 'generatecount', get_string('generatecount', 'streamvoice'));
+        $mform->setType('generatecount', PARAM_INT);
+        $mform->setDefault('generatecount', 5);
+        $mform->addHelpButton('generatecount', 'generatecount', 'streamvoice');
+
+        $mform->addElement('text', 'answercount', get_string('answercount', 'streamvoice'));
+        $mform->setType('answercount', PARAM_INT);
+        $mform->setDefault('answercount', 3);
+        $mform->addHelpButton('answercount', 'answercount', 'streamvoice');
 
         $mform->addElement('textarea', 'fixedquestions', get_string('fixedquestions', 'streamvoice'), 'wrap="virtual" rows="6" cols="70"');
         $mform->setType('fixedquestions', PARAM_RAW_TRIMMED);
@@ -125,6 +124,14 @@ class mod_streamvoice_mod_form extends moodleform_mod {
         $answer = (int) ($data['answerseconds'] ?? 0);
         if ($answer < 30 || $answer > 900) {
             $errors['answerseconds'] = get_string('answerrange', 'streamvoice');
+        }
+        $generate = (int) ($data['generatecount'] ?? 0);
+        if ($generate < 1 || $generate > 8) {
+            $errors['generatecount'] = get_string('questioncountrange', 'streamvoice');
+        }
+        $pick = (int) ($data['answercount'] ?? 0);
+        if ($pick < 1 || $pick > $generate) {
+            $errors['answercount'] = get_string('answercountrange', 'streamvoice');
         }
         return $errors;
     }

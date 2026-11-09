@@ -29,5 +29,23 @@ defined('MOODLE_INTERNAL') || die();
  * @return bool
  */
 function xmldb_streamvoice_upgrade($oldversion) {
+    global $DB;
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026111002) {
+        $table = new xmldb_table('streamvoice');
+        $generate = new xmldb_field('generatecount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '5', 'questioncount');
+        if (!$dbman->field_exists($table, $generate)) {
+            $dbman->add_field($table, $generate);
+        }
+        $answer = new xmldb_field('answercount', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '3', 'generatecount');
+        if (!$dbman->field_exists($table, $answer)) {
+            $dbman->add_field($table, $answer);
+        }
+        unset_config('generatecount', 'streamvoice');
+        unset_config('answercount', 'streamvoice');
+        upgrade_mod_savepoint(true, 2026111002, 'streamvoice');
+    }
+
     return true;
 }

@@ -35,7 +35,7 @@ class backup_streamvoice_activity_structure_step extends backup_activity_structu
     protected function define_structure() {
         $streamvoice = new backup_nested_element('streamvoice', ['id'], [
             'name', 'intro', 'introformat', 'timeopen', 'timeclose',
-            'prepseconds', 'answerseconds', 'questioncount', 'fixedquestions', 'rubric',
+            'prepseconds', 'answerseconds', 'questioncount', 'generatecount', 'answercount', 'fixedquestions', 'rubric',
             'weightfile', 'weightoral', 'allowresubmission', 'maxbytes', 'deflang', 'grade',
             'timecreated', 'timemodified',
         ]);
