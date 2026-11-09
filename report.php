@@ -1064,9 +1064,70 @@ function streamvoice_report_answers($answers): string {
  * @return string
  */
 function streamvoice_report_transcript(string $transcript): string {
-    $safe = s($transcript);
-    $marked = preg_replace('/\[[0-9:.\s-]+\]/u', '<span dir="ltr">$0</span>', $safe);
-    return $marked === null ? $safe : $marked;
+    $clean = preg_replace('/\[[0-9:.\s-]+\]/u', ' ', $transcript) ?? $transcript;
+    $clean = preg_replace('/\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?\s*-->\s*\d{1,2}:\d{2}(?::\d{2})?(?:[.,]\d+)?/u', ' ', $clean) ?? $clean;
+    $clean = preg_replace('/[ \t]{2,}/u', ' ', $clean) ?? $clean;
+    $clean = preg_replace("/\n[ \t]*\n(?:[ \t]*\n)+/", "\n\n", $clean) ?? $clean;
+    return s(trim($clean));
+}
+
+/**
+ * Two bars that show which rubric limit set this answer's score.
+ *
+ * @param array<string, mixed> $basis
+ * @return string
+ */
+function streamvoice_report_meters(array $basis): string {
+    $rows = [
+        [get_string('understandinglimit', 'streamvoice'), $basis['understanding'] ?? null],
+        [get_string('consistencylimit', 'streamvoice'), $basis['consistency'] ?? null],
+    ];
+    $html = html_writer::start_div('sv-split');
+    foreach ($rows as [$label, $value]) {
+        if ($value === null || $value === '') {
+            continue;
+        }
+        $width = max(0, min(100, (float) $value));
+        $row = html_writer::span($label);
+        $row .= html_writer::div(html_writer::tag('span', '', ['style' => 'width:' . $width . '%']), 'sv-meter');
+        $row .= html_writer::span(format_float($width, 0));
+        $html .= html_writer::div($row, 'sv-split-row');
+    }
+    $html .= html_writer::end_div();
+    return $html;
+}
+
+/**
+ * Edit the oral rubric. An empty rubric keeps Stream's default. Saving does not rescore past defenses.
+ *
+ * @param \stdClass $instance
+ * @param \stdClass $cm
+ * @param \moodle_url $action
+ * @return string
+ */
+function streamvoice_report_oral_form(\stdClass $instance, \stdClass $cm, moodle_url $action): string {
+    $html = html_writer::start_tag('form', [
+        'method' => 'post',
+        'action' => $action->out(false),
+        'class' => 'sv-oral-rubric mb-3',
+    ]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'sesskey', 'value' => sesskey()]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'id', 'value' => (int) $cm->id]);
+    $html .= html_writer::empty_tag('input', ['type' => 'hidden', 'name' => 'saverubric', 'value' => 1]);
+    $html .= html_writer::div(get_string('editoralrubric', 'streamvoice'), 'sv-label');
+    $html .= html_writer::div(get_string('editoralrubric_help', 'streamvoice'), 'small text-muted mb-2');
+    $html .= html_writer::tag('textarea', s((string) ($instance->rubric ?? '')), [
+        'name' => 'oralrubric',
+        'rows' => 6,
+        'class' => 'form-control',
+    ]);
+    $html .= html_writer::empty_tag('input', [
+        'type' => 'submit',
+        'value' => get_string('savechanges'),
+        'class' => 'btn btn-secondary mt-2',
+    ]);
+    $html .= html_writer::end_tag('form');
+    return $html;
 }
 
 /**
