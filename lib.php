@@ -53,6 +53,15 @@ function streamvoice_supports($feature) {
 }
 
 /**
+ * Keep the activity logo in its own colours in the activity chooser.
+ *
+ * @return bool
+ */
+function streamvoice_is_branded(): bool {
+    return true;
+}
+
+/**
  * @param \stdClass $data
  * @param mixed $mform
  * @return int
