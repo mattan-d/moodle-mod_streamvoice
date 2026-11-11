@@ -25,10 +25,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_streamvoice';
-$plugin->version = 2026111101;
+$plugin->version = 2026111102;
 $plugin->requires = 2017111300;
 $plugin->maturity = MATURITY_ALPHA;
-$plugin->release = '0.1.2';
+$plugin->release = '0.1.3';
 $plugin->dependencies = [
     'local_stream' => 2023060700,
 ];
