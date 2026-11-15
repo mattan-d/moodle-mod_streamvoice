@@ -6,7 +6,19 @@ A student submits a file. Stream Voice locks that file and asks the student to e
 
 The aim is to see that the student understands the work and can justify it. The activity does not try to detect whether a tool wrote the file.
 
-Stream Voice is the activity shell inside Moodle. Question generation, the timer, recording, transcription, the rubric and the score run in [Stream](https://stream-platform.cloud/).
+Stream Voice is the activity shell inside Moodle. It does not run on its own. Question generation, recording, transcription and scoring run on [Stream](https://stream-platform.cloud/), a commercial platform operated by the plugin provider, CentricApp. The submitted file, recordings, transcripts and scores are stored and processed there.
+
+## Listing type
+
+This is a paid listing. After the pilot, the essential Stream Voice functions are not free. Ongoing use requires a paid Stream plan from CentricApp, so access is sold through the Moodle Marketplace rather than as a free plugin.
+
+The Moodle plugin code does not itself generate questions, store recordings, transcribe them, or score them. Those steps need a Stream URL and API key. [local_stream](https://moodle.org/plugins/local_stream) (version 2023060700 or later) must be installed, and those two values must be saved in it. Without that, a student cannot lock a file or record a defense.
+
+**What stays free.** A new Stream account can start with a three-month pilot: no credit card and no long-term contract. During those three months the defense functions above are included. When the pilot ends, they stop unless the institution moves to a paid plan. There is no free ongoing tier.
+
+**What it costs after the pilot.** Prices are published on <https://stream-platform.cloud/>. Per month, billed annually (month-to-month price in brackets): Starter $29 ($49), Professional $79 ($129), Advanced $199 ($349). Enterprise is priced for that institution. Published plan limits that affect a defense include transcription time: 1 hour a month on Starter, 5 hours a month on Professional, and unlimited transcription on Advanced. The full quota table (storage, video syncs, and the rest) is on that page.
+
+**How to get access.** Request the account at <https://stream-platform.cloud/>, either the three-month pilot or a paid plan. Stream sends the site URL, for example `https://demo.stream-platform.cloud/`. On that site, open **System settings** (`/admin/settings`) and copy the **Account ID / API Key**. In Moodle, install `local_stream`, open **Site administration → Plugins → Local plugins → Stream**, and save the URL and the key. The same steps are in the [Stream and Moodle guide](https://docs.stream-platform.cloud/en/moodle-integration.html). To keep the service after the pilot, choose a paid plan on the Stream site. Purchase of ongoing access for this plugin is through the Moodle Marketplace.
 
 ## For the institution
 
@@ -18,7 +30,7 @@ A short Hebrew overview for the people who run an institution's systems. It uses
 
 * Moodle 4.5 or later. The plugin is developed and tested on Moodle 4.5. `version.php` still declares `requires` as 2017111300.
 * The [Stream](https://moodle.org/plugins/local_stream) local plugin, `local_stream` 2023060700 or later.
-* A Stream account. The account supplies the Stream site URL and API key that `local_stream` stores.
+* A Stream account, as described above. `local_stream` must be installed, and the account's Stream URL and API key must be saved in it.
 * A camera and microphone for each student who records a defense.
 
 ## Setup

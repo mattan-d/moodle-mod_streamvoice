@@ -17,8 +17,8 @@
 /**
  * Privacy provider.
  *
- * Submissions, recordings, transcripts and scores are stored in Stream.
- * Moodle keeps the activity definition and the gradebook entry, which core owns.
+ * Moodle does not keep the defense itself. The submitted file, identity,
+ * recordings, transcripts and scores are sent to the configured Stream site.
  *
  * @package    mod_streamvoice
  * @copyright  2026 CentricApp LTD, Dev Team (dev@centricapp.co)
@@ -29,12 +29,30 @@ namespace mod_streamvoice\privacy;
 
 defined('MOODLE_INTERNAL') || die();
 
-class provider implements \core_privacy\local\metadata\null_provider {
+use core_privacy\local\metadata\collection;
+
+class provider implements \core_privacy\local\metadata\provider {
 
     /**
-     * Explain why this plugin stores no personal data of its own.
+     * Personal data this plugin sends to Stream.
+     *
+     * @param collection $collection
+     * @return collection
      */
-    public static function get_reason(): string {
-        return 'privacy:metadata';
+    public static function get_metadata(collection $collection): collection {
+        $collection->add_external_location_link('stream', [
+            'email' => 'privacy:metadata:stream:email',
+            'firstname' => 'privacy:metadata:stream:firstname',
+            'lastname' => 'privacy:metadata:stream:lastname',
+            'username' => 'privacy:metadata:stream:username',
+            'userid' => 'privacy:metadata:stream:userid',
+            'file' => 'privacy:metadata:stream:file',
+            'note' => 'privacy:metadata:stream:note',
+            'recording' => 'privacy:metadata:stream:recording',
+            'transcript' => 'privacy:metadata:stream:transcript',
+            'grade' => 'privacy:metadata:stream:grade',
+        ], 'privacy:metadata:stream');
+
+        return $collection;
     }
 }
