@@ -16,24 +16,23 @@ A short Hebrew overview for the people who run an institution's systems. It uses
 
 ## Requirements
 
-* Moodle 4.5 or later.
-* The [Stream](https://moodle.org/plugins/local_stream) local plugin (`local_stream` 2023060700 or later), with a Stream site URL and API key.
-* A Stream site that provides the Stream Voice API.
-* A camera and microphone for students.
+* Moodle 4.5 or later. The plugin is developed and tested on Moodle 4.5. `version.php` still declares `requires` as 2017111300.
+* The [Stream](https://moodle.org/plugins/local_stream) local plugin, `local_stream` 2023060700 or later.
+* A Stream account. The account supplies the Stream site URL and API key that `local_stream` stores.
+* A camera and microphone for each student who records a defense.
 
-`version.php` currently declares `requires` as 2017111300. The activity is developed and used on Moodle 4.5.
+## Setup
 
-## Installation
-
-1. Install and configure **Site administration → Plugins → Local plugins → Stream** (Stream URL and API key).
-2. Copy this directory into `mod/streamvoice` on the Moodle server.
-3. Log in as an administrator and open **Site administration → Notifications** to install the plugin.
-4. Turn editing on in a course and add a **Stream Voice** activity.
+1. Create a Stream account and copy its site URL and API key.
+2. Install `local_stream`, then open **Site administration → Plugins → Local plugins → Stream** and save that URL and API key.
+3. Copy this directory to `mod/streamvoice` on the Moodle server.
+4. Log in as an administrator and open **Site administration → Notifications** to finish installing Stream Voice.
+5. Turn editing on in a course and add a **Stream Voice** activity.
 
 ## Activity settings
 
 * **Preparation time** and **answer time** are enforced by Stream.
-* **Number of questions** is from 1 to 8. Fixed questions, one per line, are asked first. Stream writes any remaining questions from the submitted file.
+* **Questions based on the submission** is how many questions Stream writes from the file (1 to 8, default 5). **Questions to answer** is how many of those the student chooses (default 3, and never more than the number written). When the two numbers are equal, the student answers every generated question. Fixed questions, one per line, are always asked as well.
 * **Rubric** is sent to Stream. If it is empty, Stream scores understanding, justification, consistency with the file, and independent reasoning.
 * **Weight of the work grade** and **weight of the defense grade** must add up to 100. The final grade is the work grade times the work weight, plus the defense grade times the defense weight. The defense grade starts from Stream's recommendation, and the teacher can change it.
 * A new file can be allowed only before the first recording. After that, the file stays locked.
