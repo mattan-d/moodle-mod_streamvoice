@@ -101,6 +101,9 @@ class mod_streamvoice_mod_form extends moodleform_mod {
         $mform->setDefault('maxbytes', 20971520);
 
         $this->standard_grading_coursemodule_elements();
+        if ($mform->elementExists('advancedgradingmethod_work')) {
+            $mform->setDefault('advancedgradingmethod_work', '');
+        }
         $this->standard_coursemodule_elements();
         $this->add_action_buttons();
     }

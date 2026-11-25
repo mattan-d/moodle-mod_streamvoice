@@ -47,5 +47,31 @@ function xmldb_streamvoice_upgrade($oldversion) {
         upgrade_mod_savepoint(true, 2026111002, 'streamvoice');
     }
 
+    if ($oldversion < 2026112600) {
+        // The grader used to turn every activity into a rubric. A numeric grade is the default.
+        // A rubric the teacher defined themselves stays active.
+        $areas = $DB->get_records('grading_areas', [
+            'component' => 'mod_streamvoice',
+            'areaname' => 'work',
+            'activemethod' => 'rubric',
+        ]);
+        $autonames = [
+            get_string('seminarubric', 'streamvoice'),
+            get_string_manager()->get_string('seminarubric', 'streamvoice', null, 'he'),
+        ];
+        foreach ($areas as $area) {
+            $definition = $DB->get_record('grading_definitions', ['areaid' => $area->id, 'method' => 'rubric']);
+            $copied = false;
+            if ($definition && in_array($definition->name, $autonames, true)) {
+                $criteria = $DB->count_records('gradingform_rubric_criteria', ['definitionid' => $definition->id]);
+                $copied = ((int) $criteria === 4);
+            }
+            if (!$definition || $copied) {
+                $DB->set_field('grading_areas', 'activemethod', null, ['id' => $area->id]);
+            }
+        }
+        upgrade_mod_savepoint(true, 2026112600, 'streamvoice');
+    }
+
     return true;
 }

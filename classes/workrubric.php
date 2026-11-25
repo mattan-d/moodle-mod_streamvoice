@@ -27,31 +27,35 @@ namespace mod_streamvoice;
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * A shared seminar rubric, copied into each activity so a teacher can change it.
+ * The work grade is a number unless the activity grading method is a rubric.
  */
 class workrubric {
 
     /**
-     * The activity rubric, creating the college template and the activity copy when needed.
+     * The activity rubric, when the teacher selected that grading method.
+     *
+     * A numeric grade is the default. This does not switch the activity over to a rubric.
      *
      * @param \context $context Module context.
-     * @return \gradingform_rubric_controller
+     * @return \gradingform_rubric_controller|null
      */
-    public static function controller(\context $context): \gradingform_rubric_controller {
+    public static function controller(\context $context): ?\gradingform_rubric_controller {
         global $CFG;
         require_once($CFG->dirroot . '/grade/grading/lib.php');
         require_once($CFG->dirroot . '/grade/grading/form/rubric/lib.php');
 
-        $template = self::template();
         $manager = get_grading_manager($context, 'mod_streamvoice', 'work');
         if ($manager->get_active_method() !== 'rubric') {
-            $manager->set_active_method('rubric');
+            return null;
         }
         /** @var \gradingform_rubric_controller $controller */
         $controller = $manager->get_controller('rubric');
-        if (!$controller->is_form_defined() && $template->is_form_defined()) {
-            $controller->update_definition($template->get_definition_copy($controller));
-            $controller->get_definition(true);
+        if (!$controller->is_form_defined()) {
+            $template = self::template();
+            if ($template->is_form_defined()) {
+                $controller->update_definition($template->get_definition_copy($controller));
+                $controller->get_definition(true);
+            }
         }
         return $controller;
     }
@@ -69,7 +73,7 @@ class workrubric {
         global $PAGE;
 
         $controller = self::controller($context);
-        if (!$controller->is_form_available()) {
+        if (!$controller || !$controller->is_form_available()) {
             return '';
         }
         $current = $controller->get_current_instance($teacherid, $studentid);
@@ -114,7 +118,7 @@ class workrubric {
      */
     public static function grade(\context $context, int $teacherid, int $studentid, array $data, int $grademax): ?float {
         $controller = self::controller($context);
-        if (!$controller->is_form_available()) {
+        if (!$controller || !$controller->is_form_available()) {
             return null;
         }
         $controller->set_grade_range(make_grades_menu($grademax), true);
